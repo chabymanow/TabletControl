@@ -2,20 +2,18 @@
 
 TabletControl turns an Android tablet into a companion dashboard and remote control for a Linux PC.
 
-The project consists of two parts:
+It consists of two parts:
 
-- **PC Agent** — a lightweight Python web server that collects system information and runs configured commands.
-- **Android App** — an Android application that connects to the PC Agent over the local network and displays the TabletControl dashboard.
+- **Android app** — connects to the PC over the local network and displays the dashboard.
+- **Linux PC Agent** — serves the dashboard, reports system information, discovers custom commands, and runs them on request.
 
-The complete source code for both components is contained in this repository.
+The complete Android and Linux source code is included in this repository.
 
 ---
 
 ## Features
 
-### System monitoring
-
-TabletControl displays live information from the connected Linux PC:
+TabletControl currently provides:
 
 - CPU usage
 - Memory usage
@@ -23,37 +21,18 @@ TabletControl displays live information from the connected Linux PC:
 - Download speed
 - Upload speed
 - System uptime
-- Mounted storage
-- Unmounted storage devices
 - Storage usage
+- Mounted and unmounted drive information
+- Remote command buttons
+- Automatic command discovery
+- Automatic startup through a systemd user service
+- Automatic local IP detection during installation
 
-System statistics are refreshed automatically every two seconds.
-
-### Remote commands
-
-Executable scripts placed in:
-
-```text
-~/tabletCommands
-```
-
-are automatically discovered by the PC Agent and displayed as buttons on the dashboard.
-
-Pressing a command button on the tablet launches the corresponding script on the Linux PC.
-
-This can be used for tasks such as:
-
-- Launching applications
-- Starting a work environment
-- Opening websites
-- Starting games
-- Running maintenance scripts
-- Starting custom workflows
-- Controlling other software
+System information is refreshed automatically every two seconds.
 
 ---
 
-# Architecture
+## How it works
 
 ```text
 ┌──────────────────────┐
@@ -62,15 +41,15 @@ This can be used for tasks such as:
 │    TabletControl     │
 └──────────┬───────────┘
            │
-           │ HTTP / Local Network
+           │ Local network
+           │ HTTP
            │ Port 8765
            │
            ▼
 ┌──────────────────────┐
 │      Linux PC        │
 │                      │
-│    Python Agent      │
-│      server.py       │
+│  TabletControl Agent │
 ├──────────────────────┤
 │ System statistics    │
 │ Storage information  │
@@ -79,190 +58,157 @@ This can be used for tasks such as:
 └──────────────────────┘
 ```
 
-The PC Agent listens on:
+The PC Agent listens on port:
 
 ```text
-0.0.0.0:8765
+8765
 ```
 
-The Android device connects using the PC's local network address, for example:
+A typical connection address looks like:
 
 ```text
 http://192.168.1.100:8765
 ```
 
+The PC and Android device must be able to communicate over the same local network.
+
 ---
 
-# Repository Structure
+## Repository structure
 
 ```text
 TabletControl/
-│
-├── Android/
-│   ├── app/
-│   ├── gradle/
-│   ├── build.gradle.kts
-│   ├── settings.gradle.kts
-│   └── ...
-│
-├── PC/
-│   ├── server.py
-│   ├── index.html
-│   └── style.css
-│
+├── install.sh
 ├── README.md
 ├── LICENSE
-└── .gitignore
+├── .gitignore
+│
+├── PC/
+│   ├── index.html
+│   ├── style.css
+│   │
+│   └── tabletcontrol/
+│       ├── __init__.py
+│       ├── main.py
+│       ├── api.py
+│       ├── stats.py
+│       ├── commands.py
+│       ├── auth.py
+│       └── config.py
+│
+└── Android/
+    └── Android Studio project
 ```
 
 ---
 
-# Requirements
+# Installation
 
-## Linux PC
-
-The PC Agent currently targets Linux.
-
-Required software:
-
-- Python 3
-- `psutil`
-- `lsblk`
-
-The current implementation expects `lsblk` at:
-
-```text
-/usr/bin/lsblk
-```
-
-## Android
-
-The Android client is written in Kotlin using Jetpack Compose.
-
-Current minimum Android version:
-
-```text
-Android 9.0
-API 28
-```
-
-The Android application requires network access to communicate with the PC.
-
----
-
-# Installing the PC Agent
-
-Clone the repository:
+## 1. Clone the repository
 
 ```bash
 git clone https://github.com/chabymanow/TabletControl.git
+cd TabletControl
 ```
 
-Enter the PC directory:
+## 2. Run the installer
 
 ```bash
-cd TabletControl/PC
+chmod +x install.sh
+./install.sh
 ```
 
-Create a Python virtual environment:
+The installer is a Bash script, so it can be launched from Fish, Bash, Zsh, and other interactive shells using:
 
 ```bash
-python3 -m venv .venv
+./install.sh
 ```
 
-Activate it:
+Do not source the installer.
+
+For example, do not run:
 
 ```bash
-source .venv/bin/activate
-```
-
-Install the required Python dependency:
-
-```bash
-python -m pip install psutil
-```
-
-Start TabletControl:
-
-```bash
-python server.py
-```
-
-The server should report:
-
-```text
-Tablet Dashboard
-----------------
-Listening on port 8765
-Commands: /home/USERNAME/tabletCommands
+source install.sh
 ```
 
 ---
 
-# Finding the PC IP Address
+## What the installer does
 
-TabletControl requires the local IP address of the Linux PC.
+The installer:
 
-One way to find the address is:
-
-```bash
-/usr/bin/ip route get 1.1.1.1
-```
-
-Look for:
+- checks for Python 3
+- checks for systemd user services
+- checks Python virtual-environment support
+- installs the PC Agent into:
 
 ```text
-src 192.168.x.x
+~/.local/share/tabletcontrol
 ```
 
-For example:
+- creates a private Python virtual environment
+- installs the required Python dependency
+- creates the command directory:
 
 ```text
-src 192.168.1.100
+~/tabletCommands
 ```
 
-The TabletControl address would therefore be:
+- creates the configuration file:
 
 ```text
-http://192.168.1.100:8765
+~/.config/tabletcontrol/tabletcontrol.env
 ```
 
-You can test the server from another device by opening this address in a browser.
+- creates the systemd user service:
 
-The PC and tablet must be able to communicate over the network.
+```text
+~/.config/systemd/user/tabletcontrol.service
+```
+
+- enables TabletControl to start automatically when you log in
+- starts TabletControl immediately
+- verifies that the service started successfully
+- detects the main local IPv4 address
+- prints the address to enter in the Android app
+
+A successful installation should end with output similar to:
+
+```text
+TabletControl installed successfully
+
+Service:
+  tabletcontrol.service
+
+Commands directory:
+  /home/user/tabletCommands
+
+PC address:
+  http://192.168.1.100:8765
+
+Android app:
+  Enter: 192.168.1.100
+```
+
+The installer does not require root privileges and does not modify firewall settings.
 
 ---
 
-# Android Installation
+# Android app
 
-Normal users can install TabletControl using the signed APK available from the GitHub **Releases** section.
+You can either build the Android application from source or install the signed APK from GitHub Releases.
 
-Open:
+Latest releases:
 
-```text
-https://github.com/chabymanow/TabletControl/releases
-```
+https://github.com/chabymanow/TabletControl/releases/latest
 
-Download the latest:
+After installing the app:
 
-```text
-TabletControl.apk
-```
-
-Install the APK on the Android tablet.
-
-Android may ask for permission to install applications from the browser or file manager being used.
-
----
-
-# Connecting the Android App
-
-Before connecting:
-
-1. Start the TabletControl PC Agent.
-2. Make sure the tablet and PC can communicate over the local network.
-3. Find the PC's local IP address.
-4. Configure the Android app with the PC address.
+1. Make sure TabletControl is running on the Linux PC.
+2. Open TabletControl on Android.
+3. Enter the IP address shown by the installer.
+4. Connect.
 
 Example:
 
@@ -270,42 +216,26 @@ Example:
 192.168.1.100
 ```
 
-The PC Agent uses port:
-
-```text
-8765
-```
-
-The resulting server address is:
-
-```text
-http://192.168.1.100:8765
-```
-
-The Android application stores its local TabletControl settings on the device.
+The PC Agent uses port `8765`.
 
 ---
 
-# Creating Remote Commands
+# Remote commands
 
-TabletControl discovers commands from:
+TabletControl automatically discovers executable files inside:
 
 ```text
 ~/tabletCommands
 ```
 
-Create the directory if it does not already exist:
+Each executable file becomes a button on the dashboard.
 
-```bash
-mkdir -p ~/tabletCommands
-```
-
-## Example command
+## Example
 
 Create:
 
 ```text
-~/tabletCommands/open_browser.sh
+~/tabletCommands/start_work.sh
 ```
 
 with:
@@ -319,26 +249,30 @@ firefox &
 Make it executable:
 
 ```bash
-chmod +x ~/tabletCommands/open_browser.sh
+chmod +x ~/tabletCommands/start_work.sh
 ```
 
 Reload the TabletControl dashboard.
 
-A button will appear as:
+The file:
 
 ```text
-Open Browser
+start_work.sh
 ```
 
-Pressing the button launches the script on the PC.
+will appear as:
+
+```text
+Start Work
+```
 
 ---
 
-# Command Naming
+## Command naming
 
-TabletControl automatically converts command filenames into readable button names.
+TabletControl converts command filenames into readable button labels.
 
-For example:
+Examples:
 
 ```text
 start_work.sh
@@ -350,8 +284,6 @@ becomes:
 Start Work
 ```
 
-and:
-
 ```text
 gaming-mode.sh
 ```
@@ -362,55 +294,84 @@ becomes:
 Gaming Mode
 ```
 
-The file extension is not displayed.
-
-Only regular files with executable permission are shown.
+Only regular files with executable permission are displayed.
 
 ---
 
-# Example Work Command
+# Configuration
 
-A command can launch several programs at once.
-
-For example:
-
-```bash
-#!/usr/bin/env bash
-
-google-chrome-stable &
-whatsapp-for-linux &
-outlook-for-linux &
-```
-
-Save the script as:
+TabletControl stores its PC Agent configuration in:
 
 ```text
-~/tabletCommands/start_work.sh
+~/.config/tabletcontrol/tabletcontrol.env
 ```
 
-Then:
-
-```bash
-chmod +x ~/tabletCommands/start_work.sh
-```
-
-TabletControl will automatically display:
+Default values:
 
 ```text
-Start Work
+TABLETCONTROL_HOST=0.0.0.0
+TABLETCONTROL_PORT=8765
+TABLETCONTROL_COMMANDS_DIR=/home/USER/tabletCommands
+TABLETCONTROL_AUTH_TOKEN=
+```
+
+After changing configuration, restart the service:
+
+```bash
+systemctl --user restart tabletcontrol.service
 ```
 
 ---
 
-# Dashboard API
+# Service management
 
-The PC Agent exposes a small HTTP API used by the dashboard.
+Check the service:
 
-## GET `/api/stats`
+```bash
+systemctl --user status tabletcontrol.service
+```
+
+Restart it:
+
+```bash
+systemctl --user restart tabletcontrol.service
+```
+
+Stop it:
+
+```bash
+systemctl --user stop tabletcontrol.service
+```
+
+Start it:
+
+```bash
+systemctl --user start tabletcontrol.service
+```
+
+View live logs:
+
+```bash
+journalctl --user -u tabletcontrol.service -f
+```
+
+The systemd user service starts TabletControl automatically when the user logs in.
+
+Systemd documentation:
+
+https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html
+
+---
+
+# PC Agent API
+
+TabletControl currently exposes three API endpoints used by the web dashboard and Android client.
+
+## `GET /api/stats`
 
 Returns current system information.
 
-Example structure:
+Example:
 
 ```json
 {
@@ -432,9 +393,9 @@ Example structure:
 
 ---
 
-## GET `/api/commands`
+## `GET /api/commands`
 
-Returns executable commands currently available in:
+Returns the executable commands currently available in:
 
 ```text
 ~/tabletCommands
@@ -453,23 +414,23 @@ Example:
 
 ---
 
-## POST `/api/run`
+## `POST /api/run`
 
 Runs one of the available commands.
 
-Request format:
+Request type:
 
 ```text
-Content-Type: application/x-www-form-urlencoded
+application/x-www-form-urlencoded
 ```
 
-Body:
+Example body:
 
 ```text
 command=start_work.sh
 ```
 
-Example success response:
+Example response:
 
 ```json
 {
@@ -480,29 +441,21 @@ Example success response:
 
 ---
 
-# Storage Detection
+# System monitoring
 
-TabletControl uses Linux `lsblk` to discover storage devices.
+## CPU and memory
 
-The dashboard can display:
+TabletControl uses `psutil` to read CPU and memory information.
 
-- Device name
-- Mount point
-- Filesystem
-- Used space
-- Total space
-- Usage percentage
-- Unmounted devices
+psutil documentation:
 
-The root filesystem is displayed first, followed by other mounted devices and then unmounted devices.
+https://psutil.readthedocs.io/
 
 ---
 
-# CPU Temperature
+## CPU temperature
 
-TabletControl attempts to obtain CPU temperature information using `psutil`.
-
-The current PC Agent checks common Linux sensor groups including:
+TabletControl checks common Linux temperature sensor groups including:
 
 ```text
 k10temp
@@ -511,7 +464,7 @@ zenpower
 cpu_thermal
 ```
 
-If no compatible temperature sensor is available, the dashboard displays:
+If no compatible CPU temperature sensor is available, the dashboard displays:
 
 ```text
 N/A
@@ -519,32 +472,100 @@ N/A
 
 ---
 
-# Network Traffic
+## Storage
 
-TabletControl calculates current download and upload speed using network byte counters.
+TabletControl uses `lsblk` to discover Linux storage devices and `psutil` to obtain filesystem usage.
 
-The values displayed by the dashboard represent approximately:
+The dashboard can display:
+
+- device path
+- mount point
+- filesystem
+- used space
+- total space
+- usage percentage
+- unmounted devices
+
+`lsblk` documentation:
+
+https://man7.org/linux/man-pages/man8/lsblk.8.html
+
+---
+
+## Network traffic
+
+Download and upload speed are calculated using network byte counters and displayed using appropriate units such as:
 
 ```text
-B/s
 KB/s
 MB/s
 GB/s
 ```
 
-depending on the current transfer rate.
-
 ---
 
 # Development
 
+## PC Agent
+
+The PC Agent is written in Python.
+
+Main modules:
+
+```text
+config.py
+```
+
+Application configuration.
+
+```text
+stats.py
+```
+
+CPU, memory, temperature, storage, network and uptime collection.
+
+```text
+commands.py
+```
+
+Command discovery, command labels and command execution.
+
+```text
+api.py
+```
+
+HTTP API and web-file serving.
+
+```text
+auth.py
+```
+
+Authentication support for future secure pairing.
+
+```text
+main.py
+```
+
+PC Agent entry point.
+
+To run the PC Agent manually from the `PC` directory:
+
+```bash
+python -m tabletcontrol.main
+```
+
+Python HTTP server documentation:
+
+https://docs.python.org/3/library/http.server.html
+
+---
+
 ## Android
 
-The Android application uses:
+The Android client is written in:
 
 - Kotlin
 - Jetpack Compose
-- Android Studio
 - Gradle Kotlin DSL
 
 Package:
@@ -553,43 +574,9 @@ Package:
 com.chaby.tabletcontrol
 ```
 
-Build the debug version from the Android directory:
+Android Jetpack Compose documentation:
 
-```bash
-./gradlew assembleDebug
-```
-
-For public distribution, generate a signed release APK using Android Studio:
-
-```text
-Build
-→ Generate Signed App Bundle or APK
-→ APK
-```
-
-Keep the signing keystore private.
-
-Do not commit the release keystore or its passwords to Git.
-
----
-
-## PC
-
-The PC Agent uses:
-
-- Python
-- `http.server`
-- `psutil`
-- `lsblk`
-- HTML
-- CSS
-- JavaScript
-
-Run it during development with:
-
-```bash
-python server.py
-```
+https://developer.android.com/develop/ui/compose
 
 ---
 
@@ -597,31 +584,26 @@ python server.py
 
 ## Important
 
-The current TabletControl PC Agent is intended for use on a **trusted local network**.
+The current version is intended for use on a trusted local network.
 
-The server listens on all network interfaces:
+By default, the PC Agent listens on:
 
 ```text
 0.0.0.0:8765
 ```
 
-The current implementation does not include authentication.
+Authentication support exists in the PC Agent, but authentication is currently disabled by default while Android pairing is still being developed.
 
-The `/api/run` endpoint can execute any executable file that has been deliberately placed in:
-
-```text
-~/tabletCommands
-```
+This means another device that can reach the PC on port `8765` may be able to access the TabletControl API.
 
 Therefore:
 
-**Do not expose port 8765 directly to the public internet.**
+- do not expose port `8765` directly to the public internet
+- do not configure router port forwarding for TabletControl
+- use TabletControl only on a trusted local network
+- only place trusted executable files in `~/tabletCommands`
 
-Do not configure router port forwarding for TabletControl.
-
-Only place scripts in `~/tabletCommands` that you trust.
-
-Authentication/pairing should be added before TabletControl is used across untrusted networks.
+Future versions are planned to add secure tablet-to-PC pairing and authentication tokens.
 
 ---
 
@@ -629,44 +611,36 @@ Authentication/pairing should be added before TabletControl is used across untru
 
 ## Android shows "Web page not available"
 
-Check that the PC Agent is running:
+Check that the service is running:
 
 ```bash
-python server.py
+systemctl --user status tabletcontrol.service
 ```
 
-Then test the address from the tablet's browser:
+Test the dashboard from the PC:
+
+```text
+http://localhost:8765
+```
+
+Then test from the tablet browser:
 
 ```text
 http://PC-IP:8765
 ```
 
-If the browser cannot connect, check:
+If the PC works but the tablet does not, check:
 
-- The PC IP address
-- Wi-Fi/network connectivity
-- Linux firewall settings
-- Whether port 8765 is accessible
-
----
-
-## Dashboard works in the browser but not in the Android app
-
-The Android application connects to the local server using HTTP.
-
-The application therefore requires:
-
-```xml
-<uses-permission android:name="android.permission.INTERNET" />
-```
-
-and currently allows local cleartext HTTP traffic.
+- the IP address
+- Wi-Fi or LAN connectivity
+- firewall settings
+- whether both devices are on networks that can communicate
 
 ---
 
 ## No command buttons appear
 
-Check:
+Check the command directory:
 
 ```bash
 ls -la ~/tabletCommands
@@ -674,71 +648,85 @@ ls -la ~/tabletCommands
 
 Commands must be executable.
 
-For example:
+Example:
 
 ```bash
-chmod +x ~/tabletCommands/my_command.sh
+chmod +x ~/tabletCommands/start_work.sh
 ```
 
-Then reload the dashboard.
+---
+
+## Port 8765 is already in use
+
+Check what is listening on the port:
+
+```bash
+ss -ltnp | grep 8765
+```
+
+If an older TabletControl service or development server is still running, stop it before starting the new service.
 
 ---
 
-## CPU temperature displays N/A
+## View errors
 
-The Linux system may expose temperature information using a sensor name that TabletControl does not currently recognise.
+Use:
 
-This does not affect the rest of the dashboard.
+```bash
+journalctl --user -u tabletcontrol.service -n 50 --no-pager
+```
+
+or follow logs live:
+
+```bash
+journalctl --user -u tabletcontrol.service -f
+```
 
 ---
 
-## The PC IP address changed
+# Updating
 
-Most home networks assign addresses using DHCP, so the PC address may occasionally change.
+For now, update by pulling the latest source and running the installer again:
 
-Find the current address again and update the TabletControl Android connection settings.
+```bash
+git pull
+./install.sh
+```
+
+The installer replaces the installed application files while preserving:
+
+- the existing Python virtual environment where possible
+- the existing TabletControl configuration
+- the user's `~/tabletCommands` directory
 
 ---
 
 # Releases
 
-GitHub Releases are used for distributing ready-to-install versions of TabletControl.
+Ready-to-install Android APKs are published through GitHub Releases:
 
-A release may contain:
+https://github.com/chabymanow/TabletControl/releases
 
-```text
-TabletControl.apk
-```
-
-while the Git repository contains the complete Android and PC source code.
-
-Example versioning:
-
-```text
-v0.1.0
-v0.1.1
-v0.2.0
-v1.0.0
-```
+The repository itself contains the complete source code for both the Android app and Linux PC Agent.
 
 ---
 
-# Planned Improvements
+# Planned improvements
 
-Potential future improvements include:
+Planned or possible future improvements include:
 
-- Secure tablet-to-PC pairing
-- Authentication tokens
-- Automatic PC discovery
-- Multiple PC support
-- Linux installer
-- systemd user service
-- Automatic startup
-- GitHub Actions release builds
-- Connection status and diagnostics
-- Improved command management
-- Custom command icons
-- Command groups
+- secure Android-to-PC pairing
+- authentication tokens
+- QR-code pairing
+- automatic PC discovery
+- multiple PC support
+- command groups
+- custom command icons
+- richer command metadata
+- improved diagnostics
+- installer updates
+- clean uninstaller
+- automatic release builds
 - Wake-on-LAN support
 
 ---
@@ -747,16 +735,16 @@ Potential future improvements include:
 
 Issues, suggestions and pull requests are welcome.
 
-When reporting a problem, include:
+When reporting a problem, please include:
 
 - Linux distribution
 - Android version
 - TabletControl version
-- Relevant error output
-- Steps needed to reproduce the problem
+- relevant log output
+- steps required to reproduce the problem
 
 ---
 
 # License
 
-A project licence will be specified in the `LICENSE` file.
+See the `LICENSE` file in this repository.

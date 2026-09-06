@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>TabletControl Pairing</title>
+    <link rel="stylesheet" href="style.css">
+
+    <style>
+        :root
+        {
+            color-scheme: dark;
+
+            --background: #0d1016;
+            --surface: #171b23;
+            --surface-light: #1e2430;
+            --border: #2c3442;
+
+            --text: #f5f7fa;
+            --muted: #939baa;
+
+            --accent: #78a7ff;
+            --accent-hover: #91b7ff;
+
+            --success: #68d391;
+            --success-background: rgba(104, 211, 145, 0.08);
+            --success-border: rgba(104, 211, 145, 0.28);
+
+            --danger: #ff7b7b;
+        }
+
+        *
+        {
+            box-sizing: border-box;
+        }
+
+        body
+        {
+            min-height: 100vh;
+            margin: 0;
+
+            background:
+                radial-gradient(
+                    circle at top,
+                    #171d2b 0,
+                    var(--background) 420px
+                );
+
+            color: var(--text);
+
+            font-family:
+                Inter,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+        }
+
+        .page
+        {
+            width: min(900px, calc(100% - 32px));
+            margin: 0 auto;
+            padding: 48px 0 72px;
+        }
+
+        .page-header
+        {
+            width: 100%;
+            margin-bottom: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand
+        {
+            margin-bottom: 8px;
+
+            color: var(--accent);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .page-header h1
+        {
+            margin: 0 0 8px;
+
+            font-size: 36px;
+            line-height: 1.15;
+        }
+
+        .page-header p
+        {
+            margin: 0;
+
+            color: var(--muted);
+            font-size: 16px;
+        }
+
+        .section
+        {
+            margin-bottom: 24px;
+            padding: 26px;
+
+            background: rgba(23, 27, 35, 0.92);
+
+            border: 1px solid var(--border);
+            border-radius: 16px;
+
+            box-shadow: 0 18px 50px rgba(0, 0, 0, 0.16);
+        }
+
+        .section-header
+        {
+            margin-bottom: 24px;
+        }
+
+        .section-header h2
+        {
+            margin: 0 0 7px;
+
+            font-size: 21px;
+        }
+
+        .section-header p
+        {
+            margin: 0;
+
+            color: var(--muted);
+            line-height: 1.5;
+        }
+
+        .pairing-content
+        {
+            min-height: 245px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .state
+        {
+            width: 100%;
+
+            display: none;
+
+            text-align: center;
+        }
+
+        .state.active
+        {
+            display: block;
+        }
+
+        .state-icon
+        {
+            width: 70px;
+            height: 70px;
+            margin: 0 auto 18px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 50%;
+
+            background: var(--surface-light);
+            border: 1px solid var(--border);
+
+            font-size: 30px;
+        }
+
+        .success-icon
+        {
+            background: var(--success-background);
+            border-color: var(--success-border);
+            color: var(--success);
+
+            font-size: 38px;
+            font-weight: 700;
+        }
+
+        .state h3
+        {
+            margin: 0 0 8px;
+
+            font-size: 25px;
+        }
+
+        .state-description
+        {
+            max-width: 520px;
+            margin: 0 auto 24px;
+
+            color: var(--muted);
+            line-height: 1.55;
+        }
+
+        .pairing-code
+        {
+            margin: 20px 0 12px;
+
+            color: var(--text);
+
+            font-size: clamp(46px, 9vw, 74px);
+            font-weight: 750;
+
+            letter-spacing: 0.18em;
+
+            font-variant-numeric: tabular-nums;
+        }
+
+        .pairing-status
+        {
+            margin-bottom: 24px;
+
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .paired-device-name
+        {
+            margin: 16px auto 24px;
+            padding: 13px 18px;
+
+            display: inline-block;
+
+            background: var(--success-background);
+            border: 1px solid var(--success-border);
+            border-radius: 10px;
+
+            color: var(--success);
+            font-weight: 650;
+        }
+
+        .devices
+        {
+            display: grid;
+            gap: 12px;
+        }
+
+        .device
+        {
+            padding: 17px;
+
+            display: flex;
+            align-items: center;
+            gap: 18px;
+
+            background: var(--surface-light);
+
+            border: 1px solid var(--border);
+            border-radius: 11px;
+        }
+
+        .device-info
+        {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .device-top
+        {
+            margin-bottom: 7px;
+
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .device-name
+        {
+            font-size: 16px;
+            font-weight: 650;
+        }
+
+        .device-badge
+        {
+            padding: 3px 8px;
+
+            background: var(--success-background);
+            border: 1px solid var(--success-border);
+            border-radius: 999px;
+
+            color: var(--success);
+
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .device-meta
+        {
+            margin-top: 3px;
+
+            color: var(--muted);
+            font-size: 13px;
+        }
+
+        .empty-state
+        {
+            padding: 28px;
+
+            border: 1px dashed var(--border);
+            border-radius: 11px;
+
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .message
+        {
+            margin-top: 16px;
+
+            color: var(--muted);
+        }
+
+        .message.error
+        {
+            color: var(--danger);
+        }
+
+        @media (max-width: 600px)
+        {
+            .page
+            {
+                padding: 28px 0 48px;
+            }
+
+            .section
+            {
+                padding: 20px;
+            }
+
+            .device
+            {
+                align-items: stretch;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="page">
+
+        <header class="page-header">
+            <div>
+                <div class="brand">TabletControl</div>
+                <h1>Device pairing</h1>
+                <p>Pair and manage Android devices allowed to control this PC.</p>
+            </div>
+            <div class="header-actions">
+                <a class="button" href="/">
+                    Open Dashboard
+                </a>
+            </div>
+        </header>
+
+
+        <section class="section">
+
+            <div class="pairing-content">
+
+                <div id="readyState" class="state active">
+
+                    <div class="state-icon">
+                        +
+                    </div>
+
+                    <h3>
+                        Pair a new device
+                    </h3>
+
+                    <p class="state-description">
+                        Generate a temporary code and enter it in the TabletControl Android app.
+                    </p>
+
+                    <button id="generateButton" class="button primary" type="button">
+                        Generate Pairing Code
+                    </button>
+
+                </div>
+
+
+                <div id="pairingState" class="state">
+
+                    <h3>
+                        Enter this code on your tablet
+                    </h3>
+
+                    <div id="pairingCode" class="pairing-code">
+                        ——————
+                    </div>
+
+                    <div id="pairingStatus" class="pairing-status">
+                        Waiting for device...
+                    </div>
+
+                </div>
+
+
+                <div id="successState" class="state">
+
+                    <div class="state-icon success-icon">
+                        ✓
+                    </div>
+
+                    <h3>
+                        Device paired
+                    </h3>
+
+                    <p class="state-description">
+                        This device can now securely connect to TabletControl.
+                    </p>
+
+                    <div id="pairedDeviceName" class="paired-device-name">
+                        Android device
+                    </div>
+
+                    <div>
+                        <button id="pairAnotherButton" class="button" type="button">
+                            Pair another device
+                        </button>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div id="pairingMessage" class="message"></div>
+
+        </section>
+
+
+        <section class="section">
+
+            <div class="section-header">
+
+                <h2>
+                    Paired devices
+                </h2>
+
+                <p>
+                    These devices currently have permission to use TabletControl.
+                </p>
+
+            </div>
+
+            <div id="devices" class="devices">
+
+                <div class="empty-state">
+                    Loading devices...
+                </div>
+
+            </div>
+
+            <div id="deviceMessage" class="message"></div>
+
+        </section>
+
+    </main>
+
+
+    <script>
+
+        const readyState = document.getElementById("readyState");
+        const pairingState = document.getElementById("pairingState");
+        const successState = document.getElementById("successState");
+
+        const pairingCodeElement = document.getElementById("pairingCode");
+        const pairingStatusElement = document.getElementById("pairingStatus");
+        const pairedDeviceNameElement = document.getElementById("pairedDeviceName");
+
+        const pairingMessageElement = document.getElementById("pairingMessage");
+        const deviceMessageElement = document.getElementById("deviceMessage");
+
+        const devicesElement = document.getElementById("devices");
+
+        const generateButton = document.getElementById("generateButton");
+        const pairAnotherButton = document.getElementById("pairAnotherButton");
+
+        let pairingExpiresAt = 0;
+        let countdownTimer = null;
+
+        let currentDevices = [];
+        let devicesBeforePairing = new Set();
+
+
+        function showState(state)
+        {
+            readyState.classList.remove("active");
+            pairingState.classList.remove("active");
+            successState.classList.remove("active");
+
+            state.classList.add("active");
+        }
+
+
+        function formatDuration(seconds)
+        {
+            const safeSeconds = Math.max(0, seconds);
+
+            const minutes = Math.floor(safeSeconds / 60);
+            const remainingSeconds = safeSeconds % 60;
+
+            return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
+        }
+
+
+        function formatTimestamp(timestamp)
+        {
+            if (!timestamp)
+            {
+                return "Unknown";
+            }
+
+            return new Date(timestamp * 1000).toLocaleString();
+        }
+
+
+        function setPairingMessage(message, error = false)
+        {
+            pairingMessageElement.textContent = message;
+            pairingMessageElement.classList.toggle("error", error);
+        }
+
+
+        function setDeviceMessage(message, error = false)
+        {
+            deviceMessageElement.textContent = message;
+            deviceMessageElement.classList.toggle("error", error);
+        }
+
+
+        function updateCountdown()
+        {
+            const secondsRemaining = Math.ceil(
+                (pairingExpiresAt - Date.now()) / 1000
+            );
+
+            if (secondsRemaining <= 0)
+            {
+                if (countdownTimer)
+                {
+                    clearInterval(countdownTimer);
+                    countdownTimer = null;
+                }
+
+                pairingExpiresAt = 0;
+
+                showState(readyState);
+
+                setPairingMessage(
+                    "Pairing code expired. Generate a new code to try again.",
+                    true
+                );
+
+                return;
+            }
+
+            pairingStatusElement.textContent =
+                `Expires in ${formatDuration(secondsRemaining)}`;
+        }
+
+
+        function startCountdown(seconds)
+        {
+            if (countdownTimer)
+            {
+                clearInterval(countdownTimer);
+            }
+
+            pairingExpiresAt = Date.now() + (seconds * 1000);
+
+            updateCountdown();
+
+            countdownTimer = setInterval(
+                updateCountdown,
+                1000
+            );
+        }
+
+
+        async function generatePairingCode()
+        {
+            generateButton.disabled = true;
+
+            setPairingMessage("");
+
+            devicesBeforePairing = new Set(
+                currentDevices.map(device => device.id)
+            );
+
+            try
+            {
+                const response = await fetch(
+                    "/api/pair/start",
+                    {
+                        method: "POST"
+                    }
+                );
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success)
+                {
+                    throw new Error(
+                        data.message || "Unable to generate pairing code."
+                    );
+                }
+
+                pairingCodeElement.textContent = data.code;
+
+                showState(pairingState);
+
+                startCountdown(data.expires_in);
+            }
+            catch (error)
+            {
+                showState(readyState);
+
+                setPairingMessage(
+                    error.message,
+                    true
+                );
+            }
+            finally
+            {
+                generateButton.disabled = false;
+            }
+        }
+
+
+        async function fetchDevices()
+        {
+            const response = await fetch(
+                "/api/pair/devices",
+                {
+                    cache: "no-store"
+                }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success)
+            {
+                throw new Error(
+                    data.message || "Unable to load paired devices."
+                );
+            }
+
+            return data.devices || [];
+        }
+
+
+        async function loadDevices()
+        {
+            setDeviceMessage("");
+
+            try
+            {
+                currentDevices = await fetchDevices();
+
+                renderDevices(currentDevices);
+
+                return currentDevices;
+            }
+            catch (error)
+            {
+                devicesElement.replaceChildren();
+
+                const emptyState = document.createElement("div");
+
+                emptyState.className = "empty-state";
+                emptyState.textContent = "Unable to load paired devices.";
+
+                devicesElement.appendChild(emptyState);
+
+                setDeviceMessage(
+                    error.message,
+                    true
+                );
+
+                return [];
+            }
+        }
+
+
+        function renderDevices(devices)
+        {
+            devicesElement.replaceChildren();
+
+            if (devices.length === 0)
+            {
+                const emptyState = document.createElement("div");
+
+                emptyState.className = "empty-state";
+                emptyState.textContent = "No devices are currently paired.";
+
+                devicesElement.appendChild(emptyState);
+
+                return;
+            }
+
+            for (const device of devices)
+            {
+                const deviceElement = document.createElement("div");
+                deviceElement.className = "device";
+
+                const infoElement = document.createElement("div");
+                infoElement.className = "device-info";
+
+                const topElement = document.createElement("div");
+                topElement.className = "device-top";
+
+                const nameElement = document.createElement("div");
+                nameElement.className = "device-name";
+                nameElement.textContent = device.name || "Unknown device";
+
+                const badgeElement = document.createElement("span");
+                badgeElement.className = "device-badge";
+                badgeElement.textContent = "Paired";
+
+                topElement.append(
+                    nameElement,
+                    badgeElement
+                );
+
+                const createdElement = document.createElement("div");
+                createdElement.className = "device-meta";
+                createdElement.textContent =
+                    `Paired: ${formatTimestamp(device.created_at)}`;
+
+                const lastUsedElement = document.createElement("div");
+                lastUsedElement.className = "device-meta";
+                lastUsedElement.textContent =
+                    `Last used: ${formatTimestamp(device.last_used)}`;
+
+                const removeButton = document.createElement("button");
+
+                removeButton.className = "button danger";
+                removeButton.type = "button";
+                removeButton.textContent = "Remove";
+
+                removeButton.addEventListener(
+                    "click",
+                    () => removeDevice(
+                        device.id,
+                        device.name || "this device"
+                    )
+                );
+
+                infoElement.append(
+                    topElement,
+                    createdElement,
+                    lastUsedElement
+                );
+
+                deviceElement.append(
+                    infoElement,
+                    removeButton
+                );
+
+                devicesElement.appendChild(deviceElement);
+            }
+        }
+
+
+        async function showPairingSuccess()
+        {
+            if (countdownTimer)
+            {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+
+            pairingExpiresAt = 0;
+
+            const devices = await loadDevices();
+
+            const newDevice = devices.find(
+                device => !devicesBeforePairing.has(device.id)
+            );
+
+            if (newDevice)
+            {
+                pairedDeviceNameElement.textContent =
+                    newDevice.name || "Android device";
+            }
+            else
+            {
+                pairedDeviceNameElement.textContent =
+                    "Android device";
+            }
+
+            setPairingMessage("");
+
+            showState(successState);
+        }
+
+
+        async function refreshPairingState()
+        {
+            if (pairingExpiresAt <= 0)
+            {
+                return;
+            }
+
+            try
+            {
+                const response = await fetch(
+                    "/api/pair/status",
+                    {
+                        cache: "no-store"
+                    }
+                );
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success)
+                {
+                    return;
+                }
+
+                if (!data.pairing_active)
+                {
+                    await showPairingSuccess();
+                }
+            }
+            catch (error)
+            {
+                // Ignore temporary polling failures.
+            }
+        }
+
+
+        async function removeDevice(deviceId, deviceName)
+        {
+            const confirmed = window.confirm(
+                `Remove ${deviceName} from TabletControl?`
+            );
+
+            if (!confirmed)
+            {
+                return;
+            }
+
+            setDeviceMessage("");
+
+            try
+            {
+                const response = await fetch(
+                    "/api/pair/remove",
+                    {
+                        method: "POST",
+
+                        headers:
+                        {
+                            "Content-Type": "application/json"
+                        },
+
+                        body: JSON.stringify(
+                            {
+                                device_id: deviceId
+                            }
+                        )
+                    }
+                );
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success)
+                {
+                    throw new Error(
+                        data.message || "Unable to remove device."
+                    );
+                }
+
+                setDeviceMessage(
+                    "Device removed."
+                );
+
+                await loadDevices();
+            }
+            catch (error)
+            {
+                setDeviceMessage(
+                    error.message,
+                    true
+                );
+            }
+        }
+
+
+        generateButton.addEventListener(
+            "click",
+            generatePairingCode
+        );
+
+
+        pairAnotherButton.addEventListener(
+            "click",
+            () => {
+                setPairingMessage("");
+                showState(readyState);
+            }
+        );
+
+
+        loadDevices();
+
+
+        setInterval(
+            refreshPairingState,
+            1500
+        );
+
+    </script>
+
+</body>
+</html>

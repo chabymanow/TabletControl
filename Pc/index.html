@@ -12,14 +12,15 @@
 <body>
 
     <main class="dashboard">
-
         <header class="header">
             <div>
                 <div class="status">
                     <span class="status-dot"></span>
                     System online
                 </div>
+                
             </div>
+            
             <section class="commands-section">
                 <div class="commands-grid" id="commandsGrid">
                     <div class="commands-loading">
@@ -27,7 +28,10 @@
                     </div>
                 </div>
             </section>
-            <div id="clock"> -- </div>
+
+            <a id="pairDevicesButton" class="button"" href="/pair" style="display: none;">
+                Pair Devices
+            </a>
         </header>
 
         
@@ -120,6 +124,26 @@
 
     <script>
 
+        function setupLocalControls()
+        {
+            const localHosts = [
+                "127.0.0.1",
+                "localhost",
+                "[::1]"
+            ];
+
+            const isLocal = localHosts.includes(window.location.hostname);
+
+            const pairButton = document.getElementById("pairDevicesButton");
+
+            if (isLocal && pairButton)
+            {
+                pairButton.style.display = "";
+            }
+        }
+
+        setupLocalControls();
+
         function formatBytes(bytes)
         {
             const units = [
@@ -168,19 +192,6 @@
             parts.push(`${minutes}m`);
 
             return parts.join(" ");
-        }
-
-        function updateClock()
-        {
-            const now = new Date();
-
-            document.getElementById("clock").textContent = now.toLocaleTimeString(
-                [],
-                {
-                    hour: "2-digit",
-                    minute: "2-digit"
-                }
-            );
         }
 
         async function updateStats()
@@ -421,11 +432,8 @@
             });
         }
 
-        updateClock();
         updateStats();
         loadCommands();
-
-        setInterval(updateClock, 1000);
         setInterval(updateStats, 2000);
 
     </script>

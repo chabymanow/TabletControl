@@ -1,4 +1,4 @@
-package com.chaby.cachyosdashboard
+package com.chaby.tabletcontrol
 
 import android.annotation.SuppressLint
 import android.os.Bundle
@@ -39,8 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import android.content.Context
 
-import com.chaby.cachyosdashboard.ui.theme.CachyOSDashboardTheme
+import com.chaby.tabletcontrol.ui.theme.TabletControlTheme
 
 
 class MainActivity : ComponentActivity()
@@ -49,7 +50,7 @@ class MainActivity : ComponentActivity()
     {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        setContent {CachyOSDashboardTheme {DashboardApp()}
+        setContent {TabletControlTheme {DashboardApp()}
         }
     }
 }
@@ -61,30 +62,30 @@ fun DashboardApp()
     val context = LocalContext.current
 
     val preferences =  remember {context.getSharedPreferences(
-                "dashboard_settings",
-                ComponentActivity.MODE_PRIVATE
-            )
-        }
+        "dashboard_settings",
+        Context.MODE_PRIVATE
+    )
+    }
 
     var serverIp by rememberSaveable {mutableStateOf(
-                preferences.getString(
-                "server_ip",
-                ""
-            ) ?: ""
-        )
+        preferences.getString(
+            "server_ip",
+            ""
+        ) ?: ""
+    )
     }
 
     var serverPort by rememberSaveable {mutableStateOf(
-                preferences.getString(
-                "server_port",
-                "8765"
-            ) ?: "8765"
-        )
+        preferences.getString(
+            "server_port",
+            "8765"
+        ) ?: "8765"
+    )
     }
 
     var showSettings by rememberSaveable {mutableStateOf(
-            serverIp.isBlank()
-        )
+        serverIp.isBlank()
+    )
     }
 
     if (showSettings)
@@ -127,92 +128,92 @@ fun SettingsScreen(
     var error by rememberSaveable {mutableStateOf("")}
 
     Scaffold { padding -> Box(
-            modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(24.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .padding(24.dp),
 
-            contentAlignment = Alignment.Center
-        )
+        contentAlignment = Alignment.Center
+    )
+    {
+        Card(modifier = Modifier.fillMaxWidth())
         {
-            Card(modifier = Modifier.fillMaxWidth())
+            Column(modifier = Modifier.padding(24.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp)
+            )
             {
-                Column(modifier = Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                Text(text = "Dashboard Settings",
+                    style = MaterialTheme.typography.headlineMedium
+                )
+                Text(text = "Enter the local IP address of your PC.")
+                OutlinedTextField(
+                    value = ip,
+                    onValueChange = {ip = it},
+                    label = {Text("PC IP address")},
+                    placeholder = {Text("192.168.1.100")},
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                OutlinedTextField(
+                    value = port,
+                    onValueChange = {
+                        port = it.filter {character -> character.isDigit()}
+                    },
+                    label = {Text("Port")},
+                    placeholder = {Text("8765")},
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (error.isNotBlank())
+                {
+                    Text(text = error,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+
+                Row(modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 )
                 {
-                    Text(text = "Dashboard Settings",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                    Text(text = "Enter the local IP address of your PC.")
-                    OutlinedTextField(
-                        value = ip,
-                        onValueChange = {ip = it},
-                        label = {Text("PC IP address")},
-                        placeholder = {Text("192.168.1.100")},
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    OutlinedTextField(
-                        value = port,
-                        onValueChange = {
-                            port = it.filter {character -> character.isDigit()}
-                        },
-                        label = {Text("Port")},
-                        placeholder = {Text("8765")},
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    if (error.isNotBlank())
+                    if (canCancel)
                     {
-                        Text(text = error,
-                            color = MaterialTheme.colorScheme.error
-                        )
+                        OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f))
+                        {
+                            Text("Cancel")
+                        }
                     }
 
-                    Row(modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    )
-                    {
-                        if (canCancel)
+                    Button(onClick = {val cleanIp = ip.trim()
+                        val cleanPort =  port.trim().toIntOrNull()
+                        if (cleanIp.isBlank())
                         {
-                            OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f))
-                            {
-                                Text("Cancel")
-                            }
+                            error = "Please enter the PC IP address."
+                            return@Button
                         }
 
-                        Button(onClick = {val cleanIp = ip.trim()
-                                val cleanPort =  port.trim().toIntOrNull()
-                                if (cleanIp.isBlank())
-                                {
-                                    error = "Please enter the PC IP address."
-                                    return@Button
-                                }
-
-                                if (
-                                    cleanPort == null || cleanPort !in 1..65535
-                                )
-                                {
-                                    error = "Please enter a valid port."
-                                    return@Button
-                                }
-
-                                error = ""
-                                onSave(cleanIp, cleanPort.toString())
-                            },
-
-                            modifier = Modifier.weight(1f)
+                        if (
+                            cleanPort == null || cleanPort !in 1..65535
                         )
                         {
-                            Text("Save")
+                            error = "Please enter a valid port."
+                            return@Button
                         }
+
+                        error = ""
+                        onSave(cleanIp, cleanPort.toString())
+                    },
+
+                        modifier = Modifier.weight(1f)
+                    )
+                    {
+                        Text("Save")
                     }
                 }
             }
         }
+    }
     }
 }
 
@@ -248,22 +249,22 @@ fun DashboardScreen(
                     Text(text = "CachyOS", style = MaterialTheme.typography.titleLarge)
 
                     Text(text = if (connectionError)
-                            {
-                                "Offline"
-                            }else
-                            {
-                                serverIp
-                            },
+                    {
+                        "Offline"
+                    }else
+                    {
+                        serverIp
+                    },
 
                         style = MaterialTheme.typography.bodySmall,
 
                         color =if (connectionError)
-                            {
-                                MaterialTheme.colorScheme.error
-                            }else
-                            {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            }
+                        {
+                            MaterialTheme.colorScheme.error
+                        }else
+                        {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        }
                     )
                 }
 
@@ -279,7 +280,7 @@ fun DashboardScreen(
                 {
                     DashboardWebView(url = serverUrl,
                         onConnectionChanged = {
-                            hasError -> connectionError = hasError
+                                hasError -> connectionError = hasError
                         }
                     )
                 }

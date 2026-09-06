@@ -1,4 +1,4 @@
-package com.chaby.cachyosdashboard.ui.theme
+package com.chaby.tabletcontrol.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle

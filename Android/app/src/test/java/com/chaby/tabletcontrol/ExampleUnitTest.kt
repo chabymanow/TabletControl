@@ -1,4 +1,4 @@
-package com.chaby.cachyosdashboard
+package com.chaby.tabletcontrol
 
 import org.junit.Test
 

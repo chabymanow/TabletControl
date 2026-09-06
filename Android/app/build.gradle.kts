@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.chaby.cachyosdashboard"
+    namespace = "com.chaby.tabletcontrol"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.chaby.cachyosdashboard"
+        applicationId = "com.chaby.tabletcontrol"
         minSdk = 28
         targetSdk = 37
         versionCode = 1

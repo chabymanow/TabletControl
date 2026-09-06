@@ -1,4 +1,4 @@
-package com.chaby.cachyosdashboard.ui.theme
+package com.chaby.tabletcontrol.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

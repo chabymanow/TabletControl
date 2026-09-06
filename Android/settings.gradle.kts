@@ -22,5 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CachyOS Dashboard"
+rootProject.name = "TabletControl"
 include(":app")
+ 

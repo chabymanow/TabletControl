@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>CachyOS System</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <main class="dashboard">
+
+        <header class="header">
+            <div>
+                <div class="status">
+                    <span class="status-dot"></span>
+                    System online
+                </div>
+            </div>
+            <section class="commands-section">
+                <div class="commands-grid" id="commandsGrid">
+                    <div class="commands-loading">
+                        Loading commands...
+                    </div>
+                </div>
+            </section>
+            <div id="clock"> -- </div>
+        </header>
+
+        
+
+        <section class="grid">
+
+            <article class="card">
+                <div class="label">
+                    CPU
+                </div>
+
+                <div class="value" id="cpu">
+                    --%
+                </div>
+
+                <div class="bar">
+                    <div class="bar-fill" id="cpuBar"></div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="label">
+                    Memory
+                </div>
+
+                <div class="value" id="memory">
+                    --%
+                </div>
+
+                <div class="detail" id="memoryDetail">
+                    --
+                </div>
+
+                <div class="bar">
+                    <div class="bar-fill" id="memoryBar"></div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="label">CPU Temperature</div>
+                <div class="value" id="temperature">--</div>
+                <div class="detail">Processor temperature</div>
+            </article>
+
+            <article class="card">
+                <div class="label">
+                    Download
+                </div>
+
+                <div class="value" id="download">
+                    --
+                </div>
+
+                <div class="detail">
+                    Current network traffic
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="label">Upload</div>
+                <div class="value" id="upload">--</div>
+                <div class="detail">Current network traffic</div>
+            </article>
+
+        </section>
+
+        <section class="storage-section">
+            <div class="section-heading">
+                Storage
+            </div>
+
+            <div class="storage-grid" id="storageGrid">
+                <div class="storage-loading">
+                    Loading storage...
+                </div>
+            </div>
+        </section>
+
+        <footer class="footer">
+            <div id="uptime">
+                Uptime: --
+            </div>
+
+            <div>
+                Updating every 2 seconds
+            </div>
+        </footer>
+
+    </main>
+
+    <script>
+
+        function formatBytes(bytes)
+        {
+            const units = [
+                "B",
+                "KB",
+                "MB",
+                "GB",
+                "TB"
+            ];
+
+            let value = bytes;
+            let unitIndex = 0;
+
+            while (value >= 1024 && unitIndex < units.length - 1)
+            {
+                value /= 1024;
+                unitIndex++;
+            }
+
+            return value.toFixed(unitIndex >= 3 ? 1 : 2) + " " + units[unitIndex];
+        }
+
+        function formatNetworkSpeed(bytes)
+        {
+            return formatBytes(bytes) + "/s";
+        }
+
+        function formatUptime(seconds)
+        {
+            const days = Math.floor(seconds / 86400);
+            const hours = Math.floor((seconds % 86400) / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+
+            const parts = [];
+
+            if (days > 0)
+            {
+                parts.push(`${days}d`);
+            }
+
+            if (hours > 0)
+            {
+                parts.push(`${hours}h`);
+            }
+
+            parts.push(`${minutes}m`);
+
+            return parts.join(" ");
+        }
+
+        function updateClock()
+        {
+            const now = new Date();
+
+            document.getElementById("clock").textContent = now.toLocaleTimeString(
+                [],
+                {
+                    hour: "2-digit",
+                    minute: "2-digit"
+                }
+            );
+        }
+
+        async function updateStats()
+        {
+            try
+            {
+                const response = await fetch(
+                    "/api/stats",
+                    {
+                        cache: "no-store"
+                    }
+                );
+
+                if (!response.ok)
+                {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                document.getElementById("cpu").textContent = `${Math.round(data.cpu)}%`;
+                document.getElementById("cpuBar").style.width = `${data.cpu}%`;
+
+                document.getElementById("memory").textContent = `${Math.round(data.memory.percent)}%`;
+                document.getElementById("memoryDetail").textContent =
+                    `${formatBytes(data.memory.used)} / ${formatBytes(data.memory.total)}`;
+                document.getElementById("memoryBar").style.width = `${data.memory.percent}%`;
+
+                document.getElementById("temperature").textContent =
+                    data.temperature === null
+                        ? "N/A"
+                        : `${data.temperature}°C`;
+
+                document.getElementById("download").textContent =
+                    formatNetworkSpeed(data.network.download);
+
+                document.getElementById("upload").textContent =
+                    formatNetworkSpeed(data.network.upload);
+
+                document.getElementById("uptime").textContent =
+                    `Uptime: ${formatUptime(data.uptime)}`;
+
+                updateDisks(data.disks);
+            }
+            catch (error)
+            {
+                console.error("Stats error:", error);
+            }
+        }
+
+        async function loadCommands()
+        {
+            const container = document.getElementById("commandsGrid");
+
+            if (!container)
+            {
+                console.error("commandsGrid not found");
+                return;
+            }
+
+            try
+            {
+                container.innerHTML = "Contacting server...";
+
+                const response = await fetch(
+                    "/api/commands?t=" + Date.now(),
+                    {
+                        cache: "no-store"
+                    }
+                );
+
+                if (!response.ok)
+                {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const commands = await response.json();
+
+                container.innerHTML = "";
+
+                if (!commands.length)
+                {
+                    container.innerHTML =
+                        '<div class="commands-loading">No commands found.</div>';
+
+                    return;
+                }
+
+                commands.forEach(command =>
+                {
+                    const button = document.createElement("button");
+
+                    button.className = "command-button";
+                    button.textContent = command.label;
+
+                    button.addEventListener(
+                        "click",
+                        () =>
+                        {
+                            runCommand(command.file, button);
+                        }
+                    );
+
+                    container.appendChild(button);
+                });
+            }
+            catch (error)
+            {
+                console.error("Commands error:", error);
+
+                container.innerHTML =
+                    `<div class="commands-loading">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function runCommand(command, button)
+        {
+            const originalText = button.textContent;
+
+            button.textContent = "Starting...";
+            button.disabled = true;
+
+            try
+            {
+                const body = new URLSearchParams();
+                body.set("command", command);
+
+                const response = await fetch(
+                    "/api/run",
+                    {
+                        method: "POST",
+                        headers:
+                        {
+                            "Content-Type": "application/x-www-form-urlencoded"
+                        },
+                        body: body.toString()
+                    }
+                );
+
+                const result = await response.json();
+
+                if (!result.success)
+                {
+                    throw new Error(result.message);
+                }
+
+                button.textContent = "Started ✓";
+            }
+            catch (error)
+            {
+                console.error("Command error:", error);
+
+                button.textContent = "Failed";
+            }
+
+            setTimeout(
+                () =>
+                {
+                    button.textContent = originalText;
+                    button.disabled = false;
+                },
+                1500
+            );
+        }
+
+        function updateDisks(disks)
+        {
+            const container = document.getElementById("storageGrid");
+
+            container.innerHTML = "";
+
+            if (!disks || disks.length === 0)
+            {
+                container.innerHTML =
+                    '<div class="storage-loading">No disks found.</div>';
+
+                return;
+            }
+
+            disks.forEach(disk =>
+            {
+                const card = document.createElement("div");
+                card.className = "storage-card";
+
+                const header = document.createElement("div");
+                header.className = "storage-header";
+
+                const name = document.createElement("div");
+                name.className = "storage-name";
+                name.textContent = disk.device;
+
+                const percent = document.createElement("div");
+                percent.className = "storage-percent";
+                percent.textContent = disk.mounted
+                    ? `${Math.round(disk.percent)}%`
+                    : "Not mounted";
+
+                header.appendChild(name);
+                header.appendChild(percent);
+
+                const mount = document.createElement("div");
+                mount.className = "storage-mount";
+                mount.textContent = disk.mounted
+                    ? `${disk.mountpoint} • ${disk.filesystem}`
+                    : (disk.filesystem || "Unknown filesystem");
+
+                const bar = document.createElement("div");
+                bar.className = "bar";
+
+                const barFill = document.createElement("div");
+                barFill.className = "bar-fill";
+                barFill.style.width = disk.mounted
+                    ? `${disk.percent}%`
+                    : "0%";
+
+                bar.appendChild(barFill);
+
+                const detail = document.createElement("div");
+                detail.className = "storage-detail";
+
+                const used = document.createElement("span");
+                used.textContent = disk.mounted
+                    ? `${formatBytes(disk.used)} used`
+                    : "Not mounted";
+
+                const total = document.createElement("span");
+                total.textContent = `${formatBytes(disk.total)} total`;
+
+                detail.appendChild(used);
+                detail.appendChild(total);
+
+                card.appendChild(header);
+                card.appendChild(mount);
+                card.appendChild(bar);
+                card.appendChild(detail);
+
+                container.appendChild(card);
+            });
+        }
+
+        updateClock();
+        updateStats();
+        loadCommands();
+
+        setInterval(updateClock, 1000);
+        setInterval(updateStats, 2000);
+
+    </script>
+
+</body>
+</html>

@@ -99,19 +99,13 @@
             font: inherit;
             min-height: 42px;
             padding: 10px 18px;
-
             background: var(--surface-light);
             color: var(--text);
-
             border: 1px solid var(--border);
             border-radius: 9px;
             text-decoration: none;
-
             cursor: pointer;
-
-            transition:
-                border-color 0.15s ease,
-                background 0.15s ease;
+            transition: border-color 0.15s ease, background 0.15s ease;
         }
 
         .button:hover
@@ -123,7 +117,6 @@
         {
             background: var(--accent);
             border-color: var(--accent);
-
             color: #0b1020;
             font-weight: 650;
         }
@@ -241,9 +234,7 @@
         .storage-section
         {
             padding: 20px;
-
             background: var(--surface);
-
             border: 1px solid var(--border);
             border-radius: 18px;
         }
@@ -251,22 +242,18 @@
         .storage-grid
         {
             display: grid;
-
             grid-template-columns:
                 repeat(
                     auto-fit,
                     minmax(220px, 1fr)
                 );
-
             gap: 14px;
         }
 
         .storage-card
         {
             padding: 18px;
-
             background: var(--surface-light);
-
             border: 1px solid var(--border);
             border-radius: 14px;
         }

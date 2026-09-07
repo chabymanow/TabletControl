@@ -17,16 +17,31 @@ SCRIPT_DIR="$(
     pwd -P
 )"
 
-SOURCE_DIR="${SCRIPT_DIR}/PC"
+# The repository currently uses "Pc". Keep compatibility with "PC"
+# in case the directory is renamed later or an older checkout is used.
+if [ -d "${SCRIPT_DIR}/Pc" ]
+then
+    SOURCE_DIR="${SCRIPT_DIR}/Pc"
+elif [ -d "${SCRIPT_DIR}/PC" ]
+then
+    SOURCE_DIR="${SCRIPT_DIR}/PC"
+else
+    SOURCE_DIR="${SCRIPT_DIR}/Pc"
+fi
 
 INSTALL_DIR="${HOME}/.local/share/tabletcontrol"
 VENV_DIR="${INSTALL_DIR}/.venv"
+SESSION_HELPER="${INSTALL_DIR}/import-session-environment.sh"
 
-CONFIG_DIR="${HOME}/.config/tabletcontrol"
+CONFIG_ROOT="${HOME}/.config"
+CONFIG_DIR="${CONFIG_ROOT}/tabletcontrol"
 ENV_FILE="${CONFIG_DIR}/tabletcontrol.env"
 
-SYSTEMD_DIR="${HOME}/.config/systemd/user"
+SYSTEMD_DIR="${CONFIG_ROOT}/systemd/user"
 SERVICE_FILE="${SYSTEMD_DIR}/${SERVICE_NAME}"
+
+AUTOSTART_DIR="${CONFIG_ROOT}/autostart"
+AUTOSTART_FILE="${AUTOSTART_DIR}/tabletcontrol-session.desktop"
 
 COMMANDS_DIR="${HOME}/tabletCommands"
 
@@ -78,7 +93,7 @@ command_exists()
 require_source_files()
 {
     [ -d "${SOURCE_DIR}" ] ||
-        fail "PC source directory not found: ${SOURCE_DIR}"
+        fail "PC source directory not found. Expected ${SCRIPT_DIR}/Pc"
 
     [ -d "${SOURCE_DIR}/tabletcontrol" ] ||
         fail "Python package not found: ${SOURCE_DIR}/tabletcontrol"
@@ -88,6 +103,9 @@ require_source_files()
 
     [ -f "${SOURCE_DIR}/index.html" ] ||
         fail "Missing: ${SOURCE_DIR}/index.html"
+
+    [ -f "${SOURCE_DIR}/pair.html" ] ||
+        fail "Missing: ${SOURCE_DIR}/pair.html"
 
     [ -f "${SOURCE_DIR}/style.css" ] ||
         fail "Missing: ${SOURCE_DIR}/style.css"
@@ -100,11 +118,16 @@ require_commands()
         fail "Python 3 is required but was not found."
 
     command_exists systemctl ||
-        fail "systemctl was not found. TabletControl currently requires a systemd-based Linux system."
+        fail "systemctl was not found. TabletControl requires a systemd-based Linux system."
 
     if ! systemctl --user show-environment >/dev/null 2>&1
     then
-        fail "The systemd user manager is not available for this user."
+        fail "The systemd user manager is not available for this user. Log in normally and run the installer again."
+    fi
+
+    if ! command_exists lsblk
+    then
+        warn "lsblk was not found. Storage-device information may be unavailable."
     fi
 }
 
@@ -142,7 +165,6 @@ stop_existing_service()
     if systemctl --user cat "${SERVICE_NAME}" >/dev/null 2>&1
     then
         info "Stopping existing TabletControl service..."
-
         systemctl --user stop "${SERVICE_NAME}" >/dev/null 2>&1 || true
     fi
 }
@@ -154,19 +176,29 @@ install_application_files()
 
     mkdir -p "${INSTALL_DIR}"
 
-    #
     # Preserve the virtual environment across upgrades, but replace
-    # the application source and web files.
-    #
+    # the application source and web files with the current checkout.
     rm -rf "${INSTALL_DIR}/tabletcontrol"
 
     cp -R \
         "${SOURCE_DIR}/tabletcontrol" \
         "${INSTALL_DIR}/tabletcontrol"
 
+    # Never carry Python bytecode caches into the installed copy.
+    find "${INSTALL_DIR}/tabletcontrol" \
+        -type d \
+        -name '__pycache__' \
+        -prune \
+        -exec rm -rf {} + \
+        2>/dev/null || true
+
     install -m 0644 \
         "${SOURCE_DIR}/index.html" \
         "${INSTALL_DIR}/index.html"
+
+    install -m 0644 \
+        "${SOURCE_DIR}/pair.html" \
+        "${INSTALL_DIR}/pair.html"
 
     install -m 0644 \
         "${SOURCE_DIR}/style.css" \
@@ -178,18 +210,19 @@ install_application_files()
 
 create_virtual_environment()
 {
-    if [ ! -x "${VENV_DIR}/bin/python" ]
+    if [ -x "${VENV_DIR}/bin/python" ] && \
+       "${VENV_DIR}/bin/python" -c 'import sys' >/dev/null 2>&1
     then
-        info "Creating Python virtual environment..."
-
-        rm -rf "${VENV_DIR}"
-
-        python3 -m venv "${VENV_DIR}"
-
-        success "Python virtual environment created"
-    else
         success "Existing Python virtual environment found"
+        return
     fi
+
+    info "Creating Python virtual environment..."
+
+    rm -rf "${VENV_DIR}"
+    python3 -m venv "${VENV_DIR}"
+
+    success "Python virtual environment created"
 }
 
 
@@ -211,14 +244,26 @@ install_python_dependencies()
 create_commands_directory()
 {
     mkdir -p "${COMMANDS_DIR}"
-
     success "Commands directory ready: ${COMMANDS_DIR}"
 }
 
 
-create_default_config()
+ensure_env_setting()
+{
+    local name="$1"
+    local value="$2"
+
+    if ! grep -q "^${name}=" "${ENV_FILE}" 2>/dev/null
+    then
+        printf '%s=%s\n' "${name}" "${value}" >> "${ENV_FILE}"
+    fi
+}
+
+
+create_or_migrate_config()
 {
     mkdir -p "${CONFIG_DIR}"
+    chmod 0700 "${CONFIG_DIR}"
 
     if [ ! -f "${ENV_FILE}" ]
     then
@@ -226,23 +271,127 @@ create_default_config()
 # TabletControl PC Agent configuration
 #
 # This file is loaded by the systemd user service.
-# Restart the service after changing values:
+# Restart TabletControl after changing it:
 #
 #   systemctl --user restart tabletcontrol.service
 
 TABLETCONTROL_HOST=${DEFAULT_HOST}
 TABLETCONTROL_PORT=${DEFAULT_PORT}
 TABLETCONTROL_COMMANDS_DIR=${COMMANDS_DIR}
+TABLETCONTROL_CONFIG_DIR=${CONFIG_DIR}
 
-# Leave empty until Android pairing/authentication is enabled.
-TABLETCONTROL_AUTH_TOKEN=
+# LAN clients must pair before using the protected API.
+# Localhost remains trusted for PC-side dashboard and pairing management.
+TABLETCONTROL_REQUIRE_AUTH=1
+
+# Set to 1 only when debugging HTTP requests.
+TABLETCONTROL_LOG_REQUESTS=0
 EOF
-
-        chmod 0600 "${ENV_FILE}"
 
         success "Configuration created: ${ENV_FILE}"
     else
-        success "Existing configuration preserved: ${ENV_FILE}"
+        info "Migrating existing TabletControl configuration..."
+
+        # The original pre-pairing token setting is no longer used.
+        sed -i '/^TABLETCONTROL_AUTH_TOKEN=/d' "${ENV_FILE}"
+
+        # Preserve any existing custom values and add only settings that
+        # are missing from older installations.
+        ensure_env_setting "TABLETCONTROL_HOST" "${DEFAULT_HOST}"
+        ensure_env_setting "TABLETCONTROL_PORT" "${DEFAULT_PORT}"
+        ensure_env_setting "TABLETCONTROL_COMMANDS_DIR" "${COMMANDS_DIR}"
+        ensure_env_setting "TABLETCONTROL_CONFIG_DIR" "${CONFIG_DIR}"
+        ensure_env_setting "TABLETCONTROL_REQUIRE_AUTH" "1"
+        ensure_env_setting "TABLETCONTROL_LOG_REQUESTS" "0"
+
+        success "Existing configuration preserved and updated"
+    fi
+
+    chmod 0600 "${ENV_FILE}"
+}
+
+
+create_session_helper()
+{
+    cat > "${SESSION_HELPER}" <<'EOF'
+#!/usr/bin/env bash
+
+set -u
+
+variables=()
+
+for name in \
+    DISPLAY \
+    WAYLAND_DISPLAY \
+    DBUS_SESSION_BUS_ADDRESS \
+    XDG_RUNTIME_DIR \
+    XAUTHORITY \
+    XDG_SESSION_TYPE \
+    XDG_CURRENT_DESKTOP
+do
+    if [ -n "${!name:-}" ]
+    then
+        variables+=("${name}")
+    fi
+done
+
+if [ "${#variables[@]}" -gt 0 ]
+then
+    systemctl --user import-environment "${variables[@]}" >/dev/null 2>&1 || true
+fi
+
+# Restart only if TabletControl is already running. This refreshes the
+# service environment after the graphical Wayland/X11 session starts.
+systemctl --user try-restart tabletcontrol.service >/dev/null 2>&1 || true
+EOF
+
+    chmod 0755 "${SESSION_HELPER}"
+
+    mkdir -p "${AUTOSTART_DIR}"
+
+    cat > "${AUTOSTART_FILE}" <<EOF
+[Desktop Entry]
+Type=Application
+Name=TabletControl Session Environment
+Comment=Make the graphical desktop session available to TabletControl commands
+Exec="${SESSION_HELPER}"
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+EOF
+
+    chmod 0644 "${AUTOSTART_FILE}"
+
+    success "Graphical-session integration installed"
+}
+
+
+import_current_session_environment()
+{
+    local variables=()
+    local name
+
+    for name in \
+        DISPLAY \
+        WAYLAND_DISPLAY \
+        DBUS_SESSION_BUS_ADDRESS \
+        XDG_RUNTIME_DIR \
+        XAUTHORITY \
+        XDG_SESSION_TYPE \
+        XDG_CURRENT_DESKTOP
+    do
+        if [ -n "${!name:-}" ]
+        then
+            variables+=("${name}")
+        fi
+    done
+
+    if [ "${#variables[@]}" -gt 0 ]
+    then
+        systemctl --user import-environment "${variables[@]}"
+        success "Current graphical-session environment imported"
+    else
+        warn "No graphical-session variables were detected. GUI commands will be refreshed automatically at the next desktop login."
     fi
 }
 
@@ -260,6 +409,7 @@ After=network.target
 Type=simple
 WorkingDirectory=%h/.local/share/tabletcontrol
 EnvironmentFile=-%h/.config/tabletcontrol/tabletcontrol.env
+Environment=PYTHONUNBUFFERED=1
 ExecStart=%h/.local/share/tabletcontrol/.venv/bin/python -m tabletcontrol.main
 Restart=on-failure
 RestartSec=2
@@ -277,13 +427,14 @@ enable_service()
     info "Starting TabletControl..."
 
     systemctl --user daemon-reload
+    systemctl --user enable "${SERVICE_NAME}" >/dev/null
 
-    systemctl --user enable \
-        "${SERVICE_NAME}" \
-        >/dev/null
+    # The current graphical environment must be in the systemd user manager
+    # before TabletControl is started, otherwise commands that launch desktop
+    # applications may fail on Wayland/X11.
+    import_current_session_environment
 
-    systemctl --user restart \
-        "${SERVICE_NAME}"
+    systemctl --user restart "${SERVICE_NAME}"
 
     sleep 1
 
@@ -306,7 +457,7 @@ enable_service()
 
         journalctl --user \
             -u "${SERVICE_NAME}" \
-            -n 20 \
+            -n 30 \
             --no-pager \
             >&2 || true
 
@@ -315,17 +466,23 @@ enable_service()
 }
 
 
+get_configured_value()
+{
+    local name="$1"
+
+    sed -n \
+        "s/^${name}=//p" \
+        "${ENV_FILE}" \
+        2>/dev/null |
+    tail -n 1
+}
+
+
 get_configured_port()
 {
     local port
 
-    port="$(
-        sed -n \
-            's/^TABLETCONTROL_PORT=//p' \
-            "${ENV_FILE}" \
-            2>/dev/null |
-        tail -n 1
-    )"
+    port="$(get_configured_value TABLETCONTROL_PORT)"
 
     if [ -z "${port}" ]
     then
@@ -346,9 +503,7 @@ get_primary_ipv4()
     if [ -n "${ip_binary}" ]
     then
         address="$(
-            "${ip_binary}" \
-                -4 route get 1.1.1.1 \
-                2>/dev/null |
+            "${ip_binary}" -4 route get 1.1.1.1 2>/dev/null |
             awk '
                 {
                     for (i = 1; i <= NF; i++)
@@ -361,6 +516,17 @@ get_primary_ipv4()
                     }
                 }
             '
+        )"
+
+        if [ -n "${address}" ]
+        then
+            printf '%s' "${address}"
+            return 0
+        fi
+
+        address="$(
+            "${ip_binary}" -4 addr show scope global 2>/dev/null |
+            awk '/inet / { split($2, parts, "/"); print parts[1]; exit }'
         )"
 
         if [ -n "${address}" ]
@@ -402,9 +568,11 @@ show_result()
 {
     local local_ip
     local port
+    local require_auth
 
     port="$(get_configured_port)"
     local_ip="$(get_primary_ipv4 || true)"
+    require_auth="$(get_configured_value TABLETCONTROL_REQUIRE_AUTH)"
 
     printf '\n'
     printf '========================================\n'
@@ -424,19 +592,35 @@ show_result()
     printf '  %s\n' "${ENV_FILE}"
     printf '\n'
 
+    printf 'PC dashboard:\n'
+    printf '  http://127.0.0.1:%s\n' "${port}"
+    printf '\n'
+
+    printf 'Device pairing:\n'
+    printf '  http://127.0.0.1:%s/pair\n' "${port}"
+    printf '\n'
+
     if [ -n "${local_ip}" ]
     then
-        printf 'PC address:\n'
-        printf '  http://%s:%s\n' "${local_ip}" "${port}"
-        printf '\n'
-
-        printf 'Android app:\n'
-        printf '  Enter: %s\n' "${local_ip}"
+        printf 'Android connection:\n'
+        printf '  IP:   %s\n' "${local_ip}"
+        printf '  Port: %s\n' "${port}"
+        printf '  URL:  http://%s:%s\n' "${local_ip}" "${port}"
         printf '\n'
     else
         warn "The local IPv4 address could not be determined automatically."
         printf '\n'
-        printf 'The TabletControl service is running on port %s.\n' "${port}"
+    fi
+
+    if [ "${require_auth}" = "1" ] || [ "${require_auth,,}" = "true" ]
+    then
+        printf 'Security:\n'
+        printf '  Pairing/authentication is enabled for LAN clients.\n'
+        printf '  Open the local pairing page on this PC to pair Android devices.\n'
+        printf '\n'
+    else
+        printf 'Security:\n'
+        printf '  WARNING: LAN authentication is disabled in the configuration.\n'
         printf '\n'
     fi
 
@@ -446,10 +630,9 @@ show_result()
     printf '  journalctl --user -u tabletcontrol.service -f\n'
     printf '\n'
 
-    printf 'Security:\n'
-    printf '  TabletControl currently has authentication disabled by default.\n'
-    printf '  Use it only on a trusted local network and do not expose port %s\n' "${port}"
-    printf '  directly to the public internet.\n'
+    printf 'Note:\n'
+    printf '  TabletControl uses local HTTP. Do not expose port %s directly\n' "${port}"
+    printf '  to the public internet.\n'
     printf '\n'
 }
 
@@ -467,7 +650,8 @@ main()
     create_virtual_environment
     install_python_dependencies
     create_commands_directory
-    create_default_config
+    create_or_migrate_config
+    create_session_helper
     create_systemd_service
     enable_service
     show_result

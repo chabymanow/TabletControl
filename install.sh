@@ -48,30 +48,6 @@ COMMANDS_DIR="${HOME}/tabletCommands"
 DEFAULT_HOST="0.0.0.0"
 DEFAULT_PORT="8765"
 
-import_current_session_environment()
-{
-    local variables=()
-
-    for name in \
-        DISPLAY \
-        WAYLAND_DISPLAY \
-        DBUS_SESSION_BUS_ADDRESS \
-        XDG_RUNTIME_DIR \
-        XAUTHORITY \
-        XDG_SESSION_TYPE
-    do
-        if [ -n "${!name:-}" ]
-        then
-            variables+=("${name}")
-        fi
-    done
-
-    if [ "${#variables[@]}" -gt 0 ]
-    then
-        systemctl --user import-environment "${variables[@]}"
-    fi
-}
-
 print_header()
 {
     printf '\n'

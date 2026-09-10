@@ -18,8 +18,6 @@ SCRIPT_DIR="$(
     pwd -P
 )"
 
-# The repository currently uses "Pc". Keep compatibility with "PC"
-# in case the directory is renamed later or an older checkout is used.
 if [ -d "${SCRIPT_DIR}/Pc" ]
 then
     SOURCE_DIR="${SCRIPT_DIR}/Pc"
@@ -33,6 +31,7 @@ fi
 INSTALL_DIR="${HOME}/.local/share/tabletcontrol"
 VENV_DIR="${INSTALL_DIR}/.venv"
 SESSION_HELPER="${INSTALL_DIR}/import-session-environment.sh"
+UPDATE_HELPER="${INSTALL_DIR}/run-update.sh"
 
 CONFIG_ROOT="${HOME}/.config"
 CONFIG_DIR="${CONFIG_ROOT}/tabletcontrol"
@@ -58,24 +57,20 @@ print_header()
     printf '\n'
 }
 
-
 info()
 {
     printf '• %s\n' "$*"
 }
-
 
 success()
 {
     printf '✓ %s\n' "$*"
 }
 
-
 warn()
 {
     printf '⚠ %s\n' "$*" >&2
 }
-
 
 fail()
 {
@@ -83,12 +78,10 @@ fail()
     exit 1
 }
 
-
 command_exists()
 {
     command -v "$1" >/dev/null 2>&1
 }
-
 
 require_source_files()
 {
@@ -109,8 +102,10 @@ require_source_files()
 
     [ -f "${SOURCE_DIR}/style.css" ] ||
         fail "Missing: ${SOURCE_DIR}/style.css"
-}
 
+    [ -f "${SCRIPT_DIR}/update.sh" ] ||
+        fail "Missing: ${SCRIPT_DIR}/update.sh"
+}
 
 require_commands()
 {
@@ -119,6 +114,9 @@ require_commands()
 
     command_exists systemctl ||
         fail "systemctl was not found. TabletControl requires a systemd-based Linux system."
+
+    command_exists systemd-run ||
+        fail "systemd-run was not found. TabletControl requires systemd-run for dashboard updates."
 
     if ! systemctl --user show-environment >/dev/null 2>&1
     then
@@ -130,7 +128,6 @@ require_commands()
         warn "lsblk was not found. Storage-device information may be unavailable."
     fi
 }
-
 
 check_venv_support()
 {
@@ -159,7 +156,6 @@ check_venv_support()
     rm -rf "${test_dir}"
 }
 
-
 stop_existing_service()
 {
     if systemctl --user cat "${SERVICE_NAME}" >/dev/null 2>&1
@@ -169,22 +165,18 @@ stop_existing_service()
     fi
 }
 
-
 install_application_files()
 {
     info "Installing PC Agent..."
 
     mkdir -p "${INSTALL_DIR}"
 
-    # Preserve the virtual environment across upgrades, but replace
-    # the application source and web files with the current checkout.
     rm -rf "${INSTALL_DIR}/tabletcontrol"
 
     cp -R \
         "${SOURCE_DIR}/tabletcontrol" \
         "${INSTALL_DIR}/tabletcontrol"
 
-    # Never carry Python bytecode caches into the installed copy.
     find "${INSTALL_DIR}/tabletcontrol" \
         -type d \
         -name '__pycache__' \
@@ -204,9 +196,17 @@ install_application_files()
         "${SOURCE_DIR}/style.css" \
         "${INSTALL_DIR}/style.css"
 
-    success "PC Agent files installed"
-}
+    {
+        printf '#!/usr/bin/env bash\n'
+        printf 'set -Eeuo pipefail\n'
+        printf 'exec bash %q\n' "${SCRIPT_DIR}/update.sh"
+    } > "${UPDATE_HELPER}"
 
+    chmod 0755 "${UPDATE_HELPER}"
+
+    success "PC Agent files installed"
+    success "Dashboard updater linked to: ${SCRIPT_DIR}"
+}
 
 create_virtual_environment()
 {
@@ -225,7 +225,6 @@ create_virtual_environment()
     success "Python virtual environment created"
 }
 
-
 install_python_dependencies()
 {
     info "Installing Python dependencies..."
@@ -240,13 +239,11 @@ install_python_dependencies()
     success "Python dependencies installed"
 }
 
-
 create_commands_directory()
 {
     mkdir -p "${COMMANDS_DIR}"
     success "Commands directory ready: ${COMMANDS_DIR}"
 }
-
 
 ensure_env_setting()
 {
@@ -258,7 +255,6 @@ ensure_env_setting()
         printf '%s=%s\n' "${name}" "${value}" >> "${ENV_FILE}"
     fi
 }
-
 
 create_or_migrate_config()
 {
@@ -292,11 +288,8 @@ EOF
     else
         info "Migrating existing TabletControl configuration..."
 
-        # The original pre-pairing token setting is no longer used.
         sed -i '/^TABLETCONTROL_AUTH_TOKEN=/d' "${ENV_FILE}"
 
-        # Preserve any existing custom values and add only settings that
-        # are missing from older installations.
         ensure_env_setting "TABLETCONTROL_HOST" "${DEFAULT_HOST}"
         ensure_env_setting "TABLETCONTROL_PORT" "${DEFAULT_PORT}"
         ensure_env_setting "TABLETCONTROL_COMMANDS_DIR" "${COMMANDS_DIR}"
@@ -309,7 +302,6 @@ EOF
 
     chmod 0600 "${ENV_FILE}"
 }
-
 
 create_session_helper()
 {
@@ -340,8 +332,6 @@ then
     systemctl --user import-environment "${variables[@]}" >/dev/null 2>&1 || true
 fi
 
-# Restart only if TabletControl is already running. This refreshes the
-# service environment after the graphical Wayland/X11 session starts.
 systemctl --user try-restart tabletcontrol.service >/dev/null 2>&1 || true
 EOF
 
@@ -364,7 +354,6 @@ EOF
 
     success "Graphical-session integration installed"
 }
-
 
 import_current_session_environment()
 {
@@ -395,7 +384,6 @@ import_current_session_environment()
     fi
 }
 
-
 create_systemd_service()
 {
     mkdir -p "${SYSTEMD_DIR}"
@@ -421,7 +409,6 @@ EOF
     success "systemd user service installed"
 }
 
-
 enable_service()
 {
     info "Starting TabletControl..."
@@ -429,9 +416,6 @@ enable_service()
     systemctl --user daemon-reload
     systemctl --user enable "${SERVICE_NAME}" >/dev/null
 
-    # The current graphical environment must be in the systemd user manager
-    # before TabletControl is started, otherwise commands that launch desktop
-    # applications may fail on Wayland/X11.
     import_current_session_environment
 
     systemctl --user restart "${SERVICE_NAME}"
@@ -465,7 +449,6 @@ enable_service()
     fi
 }
 
-
 get_configured_value()
 {
     local name="$1"
@@ -476,7 +459,6 @@ get_configured_value()
         2>/dev/null |
     tail -n 1
 }
-
 
 get_configured_port()
 {
@@ -491,7 +473,6 @@ get_configured_port()
 
     printf '%s' "${port}"
 }
-
 
 get_primary_ipv4()
 {
@@ -563,7 +544,6 @@ get_primary_ipv4()
     return 1
 }
 
-
 get_primary_ipv4_subnet()
 {
     local ip_binary
@@ -597,7 +577,6 @@ get_primary_ipv4_subnet()
     printf '%s' "${subnet}"
 }
 
-
 configure_ufw_firewall()
 {
     local ufw_enabled
@@ -616,6 +595,12 @@ configure_ufw_firewall()
 
     if [ "${ufw_enabled,,}" != "yes" ]
     then
+        return 0
+    fi
+
+    if [ "${TABLETCONTROL_NONINTERACTIVE_UPDATE:-0}" = "1" ]
+    then
+        info "UFW is active; keeping the existing firewall configuration during dashboard update."
         return 0
     fi
 
@@ -655,7 +640,6 @@ configure_ufw_firewall()
 
     printf '\n'
 }
-
 
 show_result()
 {
@@ -721,6 +705,7 @@ show_result()
     printf '  systemctl --user status tabletcontrol.service\n'
     printf '  systemctl --user restart tabletcontrol.service\n'
     printf '  journalctl --user -u tabletcontrol.service -f\n'
+    printf '  journalctl --user -u tabletcontrol-update.service -f\n'
     printf '\n'
 
     printf 'Note:\n'
@@ -728,7 +713,6 @@ show_result()
     printf '  to the public internet.\n'
     printf '\n'
 }
-
 
 main()
 {
@@ -750,6 +734,5 @@ main()
     enable_service
     show_result
 }
-
 
 main "$@"

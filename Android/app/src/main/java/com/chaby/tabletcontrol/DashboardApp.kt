@@ -51,6 +51,7 @@ fun DashboardApp()
         SettingsScreen(
             currentIp = serverIp,
             currentPort = serverPort,
+            currentAuthToken = authToken,
             onSave = { ip, port, token ->
                 val oldIp = serverIp
 

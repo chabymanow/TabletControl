@@ -136,7 +136,7 @@ run_installer()
     info "Updating the installed PC Agent..."
     printf '\n'
 
-    if ! TABLETCONTROL_NONINTERACTIVE_UPDATE=1 bash "${SCRIPT_DIR}/install.sh"
+    if ! bash "${SCRIPT_DIR}/install.sh"
     then
         fail "The source was updated, but install.sh did not complete successfully."
     fi

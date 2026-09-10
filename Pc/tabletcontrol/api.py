@@ -17,6 +17,7 @@ from .auth import (
     is_authorized,
     pairing_is_active,
     remove_paired_device,
+    update_paired_device_name,
     verify_pairing_code,
 )
 from .commands import get_commands, run_command
@@ -357,6 +358,37 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             }
         )
 
+    def handle_device_name(self):
+        device = get_authenticated_device(self.headers)
+
+        if device is None:
+            self.send_error_json("Unauthorized", 401)
+            return
+
+        try:
+            data = self.read_request_data()
+        except ValueError as error:
+            self.send_error_json(str(error), 400)
+            return
+
+        device_name = str(data.get("device_name", "")).strip()[:80]
+
+        if not device_name:
+            self.send_error_json("Device name is required.", 400)
+            return
+
+        if not update_paired_device_name(device.get("id"), device_name):
+            self.send_error_json("Device not found.", 404)
+            return
+
+        self.send_json(
+            {
+                "success": True,
+                "message": "Device name updated.",
+                "device_name": device_name,
+            }
+        )
+
     def handle_unpair(self):
         device = get_authenticated_device(self.headers)
 
@@ -446,6 +478,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         if path == "/api/pair/remove":
             self.handle_remove_device()
+            return
+
+        if path == "/api/pair/name":
+            self.handle_device_name()
             return
 
         if path == "/api/pair/unpair":

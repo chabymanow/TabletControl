@@ -117,6 +117,23 @@ def get_disks():
 
 
         #
+        # Ignore virtual read-only package images such as Snap mounts.
+        # These appear as /dev/loop* devices with squashfs and are not
+        # user storage volumes.
+        #
+        if (
+            device_type == "loop"
+            or filesystem == "squashfs"
+            or any(
+                mountpoint == "/snap"
+                or mountpoint.startswith("/snap/")
+                for mountpoint in valid_mountpoints
+            )
+        ):
+            return
+
+
+        #
         # Mounted filesystem / partition
         #
         if valid_mountpoints:

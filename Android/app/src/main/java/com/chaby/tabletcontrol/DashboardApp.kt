@@ -81,6 +81,19 @@ fun DashboardApp()
                     showSettings = false
                 }
             },
+            onDisconnect = {
+                AuthStorage.clearToken(context)
+                authToken = ""
+                serverIp = ""
+                serverPort = "8765"
+
+                preferences.edit()
+                    .remove("server_ip")
+                    .putString("server_port", "8765")
+                    .apply()
+
+                showSettings = true
+            },
             canCancel = serverIp.isNotBlank()
         )
     }

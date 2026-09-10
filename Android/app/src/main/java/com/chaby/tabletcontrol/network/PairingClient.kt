@@ -192,6 +192,59 @@ object PairingClient
         }
     }
 
+    suspend fun syncDeviceName(
+        ip: String,
+        port: String,
+        token: String
+    ): Boolean
+    {
+        if (token.isBlank())
+        {
+            return false
+        }
+
+        return withContext(Dispatchers.IO) {
+            val connection = URL(
+                "http://$ip:$port/api/pair/name"
+            ).openConnection() as HttpURLConnection
+
+            try
+            {
+                val requestBody = JSONObject().apply {
+                    put("device_name", getDeviceName())
+                }
+
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 3000
+                connection.readTimeout = 3000
+                connection.useCaches = false
+                connection.doOutput = true
+                connection.setRequestProperty(
+                    "Content-Type",
+                    "application/json; charset=utf-8"
+                )
+                connection.setRequestProperty("Accept", "application/json")
+                connection.setRequestProperty("Authorization", "Bearer $token")
+
+                connection.outputStream.use { output ->
+                    output.write(
+                        requestBody.toString().toByteArray(Charsets.UTF_8)
+                    )
+                }
+
+                connection.responseCode in 200..299
+            }
+            catch (exception: Exception)
+            {
+                false
+            }
+            finally
+            {
+                connection.disconnect()
+            }
+        }
+    }
+
     suspend fun disconnect(
         ip: String,
         port: String,

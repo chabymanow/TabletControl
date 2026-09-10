@@ -4,6 +4,14 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        create("release") {
+            storeFile = file(providers.gradleProperty("TABLETCONTROL_KEYSTORE_PATH").get())
+            storePassword = providers.gradleProperty("TABLETCONTROL_KEYSTORE_PASSWORD").get()
+            keyAlias = providers.gradleProperty("TABLETCONTROL_KEY_ALIAS").get()
+            keyPassword = providers.gradleProperty("TABLETCONTROL_KEY_PASSWORD").get()
+        }
+    }
     namespace = "com.chaby.tabletcontrol"
     compileSdk {
         version = release(37)
@@ -21,6 +29,8 @@ android {
 
     buildTypes {
         release {
+            signingConfig = signingConfigs.getByName("release")
+
             optimization {
                 enable = false
             }

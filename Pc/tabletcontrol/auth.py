@@ -220,6 +220,26 @@ def get_paired_devices():
         ]
 
 
+def update_paired_device_name(device_id, device_name):
+    clean_name = str(device_name).strip()[:80]
+
+    if not clean_name:
+        return False
+
+    with _auth_lock:
+        data = load_auth_data()
+
+        for device in data["devices"]:
+            if device.get("id") == device_id:
+                if device.get("name") != clean_name:
+                    device["name"] = clean_name
+                    save_auth_data(data)
+
+                return True
+
+    return False
+
+
 def remove_paired_device(device_id):
     with _auth_lock:
         data = load_auth_data()

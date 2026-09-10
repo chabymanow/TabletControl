@@ -29,6 +29,7 @@ from .config import (
     WEB_DIR,
 )
 from .stats import get_stats
+from .updater import start_update
 
 
 def get_primary_ipv4():
@@ -472,6 +473,25 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             }
         )
 
+    def handle_update(self):
+        if not self.require_authorization():
+            return
+
+        try:
+            result = start_update()
+
+        except (FileNotFoundError, RuntimeError) as error:
+            self.send_error_json(
+                str(error),
+                500
+            )
+            return
+
+        self.send_json(
+            result,
+            202 if result.get("success") else 409
+        )
+
     def serve_pairing_page(self):
         if not self.require_local_management():
             return
@@ -543,6 +563,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         if path == "/api/pair/unpair":
             self.handle_unpair()
+            return
+
+        if path == "/api/update":
+            self.handle_update()
             return
 
         if path != "/api/run":

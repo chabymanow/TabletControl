@@ -28,15 +28,9 @@
                 </div>
             </section>
 
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <button id="updateButton" class="button" type="button">
-                    Update PC Agent
-                </button>
-
-                <a id="pairDevicesButton" class="button" href="/pair" style="display: none;">
-                    Pair Devices
-                </a>
-            </div>
+            <a id="pairDevicesButton" class="button" href="/pair" style="display: none;">
+                Pair Devices
+            </a>
         </header>
 
         <section class="grid">
@@ -194,11 +188,6 @@
             parts.push(`${minutes}m`);
 
             return parts.join(" ");
-        }
-
-        function sleep(milliseconds)
-        {
-            return new Promise(resolve => setTimeout(resolve, milliseconds));
         }
 
         async function updateStats()
@@ -363,91 +352,6 @@
             );
         }
 
-        async function runUpdate()
-        {
-            const button = document.getElementById("updateButton");
-
-            if (!button)
-            {
-                return;
-            }
-
-            if (!window.confirm(
-                "Update the TabletControl PC Agent from GitHub? The dashboard will restart briefly."
-            ))
-            {
-                return;
-            }
-
-            const originalText = button.textContent;
-            button.disabled = true;
-            button.textContent = "Starting update...";
-
-            try
-            {
-                const response = await fetch(
-                    "/api/update",
-                    {
-                        method: "POST",
-                        cache: "no-store"
-                    }
-                );
-
-                const result = await response.json();
-
-                if (!response.ok || !result.success)
-                {
-                    throw new Error(result.message || `HTTP ${response.status}`);
-                }
-
-                button.textContent = "Updating...";
-
-                await sleep(3000);
-
-                for (let attempt = 0; attempt < 30; attempt++)
-                {
-                    try
-                    {
-                        const status = await fetch(
-                            "/api/stats?t=" + Date.now(),
-                            {
-                                cache: "no-store"
-                            }
-                        );
-
-                        if (status.ok)
-                        {
-                            window.location.reload();
-                            return;
-                        }
-                    }
-                    catch (error)
-                    {
-                        // The service is expected to be unavailable briefly.
-                    }
-
-                    await sleep(2000);
-                }
-
-                button.textContent = "Check PC";
-                button.disabled = false;
-            }
-            catch (error)
-            {
-                console.error("Update error:", error);
-                button.textContent = "Update failed";
-
-                setTimeout(
-                    () =>
-                    {
-                        button.textContent = originalText;
-                        button.disabled = false;
-                    },
-                    2500
-                );
-            }
-        }
-
         function updateDisks(disks)
         {
             const container = document.getElementById("storageGrid");
@@ -522,8 +426,6 @@
                 container.appendChild(card);
             });
         }
-
-        document.getElementById("updateButton")?.addEventListener("click", runUpdate);
 
         updateStats();
         loadCommands();

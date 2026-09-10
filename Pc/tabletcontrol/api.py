@@ -29,7 +29,6 @@ from .config import (
     WEB_DIR,
 )
 from .stats import get_stats
-from .updater import start_update
 
 
 def get_primary_ipv4():
@@ -40,11 +39,7 @@ def get_primary_ipv4():
             socket.AF_INET,
             socket.SOCK_DGRAM
         )
-
-        connection.connect(
-            ("1.1.1.1", 80)
-        )
-
+        connection.connect(("1.1.1.1", 80))
         address = connection.getsockname()[0]
         parsed_address = ipaddress.ip_address(address)
 
@@ -55,10 +50,8 @@ def get_primary_ipv4():
             and not parsed_address.is_unspecified
         ):
             return address
-
     except (OSError, ValueError):
         pass
-
     finally:
         if connection is not None:
             connection.close()
@@ -71,7 +64,6 @@ def get_primary_ipv4():
                 continue
 
             interface = interface_stats.get(interface_name)
-
             if interface is not None and not interface.isup:
                 continue
 
@@ -81,7 +73,6 @@ def get_primary_ipv4():
 
                 try:
                     parsed_address = ipaddress.ip_address(address.address)
-
                 except ValueError:
                     continue
 
@@ -105,7 +96,6 @@ def get_primary_ipv4():
 
                 try:
                     parsed_address = ipaddress.ip_address(address.address)
-
                 except ValueError:
                     continue
 
@@ -115,7 +105,6 @@ def get_primary_ipv4():
                     and not parsed_address.is_unspecified
                 ):
                     return address.address
-
     except (OSError, ValueError):
         pass
 
@@ -134,7 +123,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         )
         self.send_header("Pragma", "no-cache")
         self.send_header("Expires", "0")
-
         super().end_headers()
 
     def send_json(self, data, status=200, headers=None):
@@ -145,10 +133,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "Content-Type",
             "application/json; charset=utf-8"
         )
-        self.send_header(
-            "Content-Length",
-            str(len(body))
-        )
+        self.send_header("Content-Length", str(len(body)))
 
         if headers:
             for name, value in headers.items():
@@ -167,9 +152,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         )
 
     def is_local_request(self):
-        address = self.client_address[0]
-
-        return address in {
+        return self.client_address[0] in {
             "127.0.0.1",
             "::1",
         }
@@ -190,10 +173,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         }:
             return False
 
-        origin = self.headers.get(
-            "Origin",
-            ""
-        )
+        origin = self.headers.get("Origin", "")
 
         if not origin:
             return True
@@ -212,7 +192,6 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "This action is only available locally on the PC.",
             403
         )
-
         return False
 
     def require_authorization(self):
@@ -222,57 +201,33 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if is_authorized(self.headers):
             return True
 
-        self.send_error_json(
-            "Unauthorized",
-            401
-        )
-
+        self.send_error_json("Unauthorized", 401)
         return False
 
     def read_request_data(self):
         try:
-            length = int(
-                self.headers.get(
-                    "Content-Length",
-                    0
-                )
-            )
-
+            length = int(self.headers.get("Content-Length", 0))
         except ValueError:
-            raise ValueError(
-                "Invalid Content-Length"
-            )
+            raise ValueError("Invalid Content-Length")
 
         if length <= 0:
             return {}
 
-        body = self.rfile.read(length).decode(
-            "utf-8"
-        )
-
-        content_type = self.headers.get(
-            "Content-Type",
-            ""
-        )
+        body = self.rfile.read(length).decode("utf-8")
+        content_type = self.headers.get("Content-Type", "")
 
         if "application/json" in content_type:
             try:
                 data = json.loads(body)
-
             except json.JSONDecodeError:
-                raise ValueError(
-                    "Invalid JSON"
-                )
+                raise ValueError("Invalid JSON")
 
             if not isinstance(data, dict):
-                raise ValueError(
-                    "Request body must be an object"
-                )
+                raise ValueError("Request body must be an object")
 
             return data
 
         parsed = parse_qs(body)
-
         return {
             key: values[0]
             for key, values in parsed.items()
@@ -322,33 +277,17 @@ class DashboardHandler(SimpleHTTPRequestHandler):
     def handle_pairing(self):
         try:
             data = self.read_request_data()
-
         except ValueError as error:
-            self.send_error_json(
-                str(error),
-                400
-            )
+            self.send_error_json(str(error), 400)
             return
 
-        code = str(
-            data.get(
-                "code",
-                ""
-            )
-        ).strip()
-
+        code = str(data.get("code", "")).strip()
         device_name = str(
-            data.get(
-                "device_name",
-                "Android Tablet"
-            )
+            data.get("device_name", "Android Tablet")
         ).strip()
 
         if not code:
-            self.send_error_json(
-                "Pairing code is required.",
-                400
-            )
+            self.send_error_json("Pairing code is required.", 400)
             return
 
         if not verify_pairing_code(code):
@@ -358,10 +297,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             )
             return
 
-        credentials = create_device_token(
-            device_name
-        )
-
+        credentials = create_device_token(device_name)
         token = credentials["token"]
 
         cookie = (
@@ -400,33 +336,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         try:
             data = self.read_request_data()
-
         except ValueError as error:
-            self.send_error_json(
-                str(error),
-                400
-            )
+            self.send_error_json(str(error), 400)
             return
 
-        device_id = str(
-            data.get(
-                "device_id",
-                ""
-            )
-        ).strip()
+        device_id = str(data.get("device_id", "")).strip()
 
         if not device_id:
-            self.send_error_json(
-                "Device ID is required.",
-                400
-            )
+            self.send_error_json("Device ID is required.", 400)
             return
 
         if not remove_paired_device(device_id):
-            self.send_error_json(
-                "Device not found.",
-                404
-            )
+            self.send_error_json("Device not found.", 404)
             return
 
         self.send_json(
@@ -440,19 +361,13 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         device = get_authenticated_device(self.headers)
 
         if device is None:
-            self.send_error_json(
-                "Unauthorized",
-                401
-            )
+            self.send_error_json("Unauthorized", 401)
             return
 
         device_id = device.get("id")
 
         if not device_id or not remove_paired_device(device_id):
-            self.send_error_json(
-                "Device not found.",
-                404
-            )
+            self.send_error_json("Device not found.", 404)
             return
 
         expired_cookie = (
@@ -473,37 +388,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             }
         )
 
-    def handle_update(self):
-        if not self.require_authorization():
-            return
-
-        try:
-            result = start_update()
-
-        except (FileNotFoundError, RuntimeError) as error:
-            self.send_error_json(
-                str(error),
-                500
-            )
-            return
-
-        self.send_json(
-            result,
-            202 if result.get("success") else 409
-        )
-
     def serve_pairing_page(self):
         if not self.require_local_management():
             return
 
         self.path = "/pair.html"
-
         return super().do_GET()
 
     def do_GET(self):
-        path = urlparse(
-            self.path
-        ).path
+        path = urlparse(self.path).path
 
         if path in {
             "/pair",
@@ -528,26 +421,20 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             if not self.require_authorization():
                 return
 
-            self.send_json(
-                get_stats()
-            )
+            self.send_json(get_stats())
             return
 
         if path == "/api/commands":
             if not self.require_authorization():
                 return
 
-            self.send_json(
-                get_commands()
-            )
+            self.send_json(get_commands())
             return
 
         return super().do_GET()
 
     def do_POST(self):
-        path = urlparse(
-            self.path
-        ).path
+        path = urlparse(self.path).path
 
         if path == "/api/pair/start":
             self.handle_pairing_start()
@@ -565,15 +452,8 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.handle_unpair()
             return
 
-        if path == "/api/update":
-            self.handle_update()
-            return
-
         if path != "/api/run":
-            self.send_error_json(
-                "Not found",
-                404
-            )
+            self.send_error_json("Not found", 404)
             return
 
         if not self.require_authorization():
@@ -581,32 +461,18 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         try:
             data = self.read_request_data()
-
         except ValueError as error:
-            self.send_error_json(
-                str(error),
-                400
-            )
+            self.send_error_json(str(error), 400)
             return
 
-        filename = str(
-            data.get(
-                "command",
-                ""
-            )
-        ).strip()
+        filename = str(data.get("command", "")).strip()
 
         if not filename:
-            self.send_error_json(
-                "Command is required",
-                400
-            )
+            self.send_error_json("Command is required", 400)
             return
 
         try:
-            run_command(
-                filename
-            )
+            run_command(filename)
 
             self.send_json(
                 {
@@ -614,17 +480,12 @@ class DashboardHandler(SimpleHTTPRequestHandler):
                     "message": "Command started",
                 }
             )
-
         except (
             ValueError,
             FileNotFoundError,
             PermissionError
         ) as error:
-            self.send_error_json(
-                str(error),
-                400
-            )
-
+            self.send_error_json(str(error), 400)
         except OSError as error:
             self.send_error_json(
                 f"Unable to start command: {error}",
@@ -633,7 +494,4 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, format, *args):
         if LOG_REQUESTS:
-            super().log_message(
-                format,
-                *args
-            )
+            super().log_message(format, *args)

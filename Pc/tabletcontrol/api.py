@@ -11,6 +11,7 @@ from .auth import (
     authentication_enabled,
     create_device_token,
     create_pairing_code,
+    get_authenticated_device,
     get_paired_devices,
     get_pairing_seconds_remaining,
     is_authorized,
@@ -434,6 +435,43 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             }
         )
 
+    def handle_unpair(self):
+        device = get_authenticated_device(self.headers)
+
+        if device is None:
+            self.send_error_json(
+                "Unauthorized",
+                401
+            )
+            return
+
+        device_id = device.get("id")
+
+        if not device_id or not remove_paired_device(device_id):
+            self.send_error_json(
+                "Device not found.",
+                404
+            )
+            return
+
+        expired_cookie = (
+            f"{SESSION_COOKIE_NAME}=; "
+            f"Path=/; "
+            f"Max-Age=0; "
+            f"HttpOnly; "
+            f"SameSite=Strict"
+        )
+
+        self.send_json(
+            {
+                "success": True,
+                "message": "Device unpaired.",
+            },
+            headers={
+                "Set-Cookie": expired_cookie,
+            }
+        )
+
     def serve_pairing_page(self):
         if not self.require_local_management():
             return
@@ -501,6 +539,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
         if path == "/api/pair/remove":
             self.handle_remove_device()
+            return
+
+        if path == "/api/pair/unpair":
+            self.handle_unpair()
             return
 
         if path != "/api/run":

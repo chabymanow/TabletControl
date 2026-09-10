@@ -31,7 +31,6 @@ fi
 INSTALL_DIR="${HOME}/.local/share/tabletcontrol"
 VENV_DIR="${INSTALL_DIR}/.venv"
 SESSION_HELPER="${INSTALL_DIR}/import-session-environment.sh"
-UPDATE_HELPER="${INSTALL_DIR}/run-update.sh"
 
 CONFIG_ROOT="${HOME}/.config"
 CONFIG_DIR="${CONFIG_ROOT}/tabletcontrol"
@@ -102,9 +101,6 @@ require_source_files()
 
     [ -f "${SOURCE_DIR}/style.css" ] ||
         fail "Missing: ${SOURCE_DIR}/style.css"
-
-    [ -f "${SCRIPT_DIR}/update.sh" ] ||
-        fail "Missing: ${SCRIPT_DIR}/update.sh"
 }
 
 require_commands()
@@ -114,9 +110,6 @@ require_commands()
 
     command_exists systemctl ||
         fail "systemctl was not found. TabletControl requires a systemd-based Linux system."
-
-    command_exists systemd-run ||
-        fail "systemd-run was not found. TabletControl requires systemd-run for dashboard updates."
 
     if ! systemctl --user show-environment >/dev/null 2>&1
     then
@@ -172,6 +165,7 @@ install_application_files()
     mkdir -p "${INSTALL_DIR}"
 
     rm -rf "${INSTALL_DIR}/tabletcontrol"
+    rm -f "${INSTALL_DIR}/run-update.sh"
 
     cp -R \
         "${SOURCE_DIR}/tabletcontrol" \
@@ -196,16 +190,7 @@ install_application_files()
         "${SOURCE_DIR}/style.css" \
         "${INSTALL_DIR}/style.css"
 
-    {
-        printf '#!/usr/bin/env bash\n'
-        printf 'set -Eeuo pipefail\n'
-        printf 'exec bash %q\n' "${SCRIPT_DIR}/update.sh"
-    } > "${UPDATE_HELPER}"
-
-    chmod 0755 "${UPDATE_HELPER}"
-
     success "PC Agent files installed"
-    success "Dashboard updater linked to: ${SCRIPT_DIR}"
 }
 
 create_virtual_environment()
@@ -598,12 +583,6 @@ configure_ufw_firewall()
         return 0
     fi
 
-    if [ "${TABLETCONTROL_NONINTERACTIVE_UPDATE:-0}" = "1" ]
-    then
-        info "UFW is active; keeping the existing firewall configuration during dashboard update."
-        return 0
-    fi
-
     port="$(get_configured_port)"
     subnet="$(get_primary_ipv4_subnet || true)"
 
@@ -705,7 +684,6 @@ show_result()
     printf '  systemctl --user status tabletcontrol.service\n'
     printf '  systemctl --user restart tabletcontrol.service\n'
     printf '  journalctl --user -u tabletcontrol.service -f\n'
-    printf '  journalctl --user -u tabletcontrol-update.service -f\n'
     printf '\n'
 
     printf 'Note:\n'

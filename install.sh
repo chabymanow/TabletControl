@@ -6,7 +6,8 @@ set -Eeuo pipefail
 # TabletControl installer
 #
 # Installs the Linux PC Agent for the current user.
-# No root privileges are required.
+# Root privileges are not required for the app itself. If UFW is active,
+# sudo is used once to add a LAN-only firewall rule for TabletControl.
 #
 
 APP_NAME="TabletControl"
@@ -502,7 +503,7 @@ get_primary_ipv4()
     if [ -n "${ip_binary}" ]
     then
         address="$(
-            "${ip_binary}" -4 route get 1.1.1.1 2>/dev/null |
+            { "${ip_binary}" -4 route get 1.1.1.1 2>/dev/null || true; } |
             awk '
                 {
                     for (i = 1; i <= NF; i++)
@@ -524,7 +525,7 @@ get_primary_ipv4()
         fi
 
         address="$(
-            "${ip_binary}" -4 addr show scope global 2>/dev/null |
+            { "${ip_binary}" -4 addr show scope global 2>/dev/null || true; } |
             awk '/inet / { split($2, parts, "/"); print parts[1]; exit }'
         )"
 
@@ -538,7 +539,7 @@ get_primary_ipv4()
     if command_exists hostname
     then
         address="$(
-            hostname -I 2>/dev/null |
+            { hostname -I 2>/dev/null || true; } |
             tr ' ' '\n' |
             awk '
                 /^127\./ {
@@ -560,6 +561,99 @@ get_primary_ipv4()
     fi
 
     return 1
+}
+
+
+get_primary_ipv4_subnet()
+{
+    local ip_binary
+    local address
+    local subnet
+
+    ip_binary="$(command -v ip 2>/dev/null || true)"
+    address="$(get_primary_ipv4 || true)"
+
+    if [ -z "${ip_binary}" ] || [ -z "${address}" ]
+    then
+        return 1
+    fi
+
+    subnet="$(
+        { "${ip_binary}" -4 route show scope link 2>/dev/null || true; } |
+        awk -v address="${address}" '
+            $0 ~ ("src " address "([[:space:]]|$)") &&
+            $1 ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\/[0-9]+$/ {
+                print $1
+                exit
+            }
+        '
+    )"
+
+    if [ -z "${subnet}" ]
+    then
+        return 1
+    fi
+
+    printf '%s' "${subnet}"
+}
+
+
+configure_ufw_firewall()
+{
+    local ufw_enabled
+    local port
+    local subnet
+
+    if ! command_exists ufw
+    then
+        return 0
+    fi
+
+    ufw_enabled="$(
+        sed -n 's/^ENABLED=//p' /etc/ufw/ufw.conf 2>/dev/null |
+        tail -n 1
+    )"
+
+    if [ "${ufw_enabled,,}" != "yes" ]
+    then
+        return 0
+    fi
+
+    port="$(get_configured_port)"
+    subnet="$(get_primary_ipv4_subnet || true)"
+
+    printf '\n'
+    info "UFW firewall is active."
+
+    if [ -z "${subnet}" ]
+    then
+        warn "Could not determine the local IPv4 subnet automatically."
+        warn "TabletControl may be blocked from Android devices on the LAN."
+        printf '  Allow TCP port %s from your local network in UFW, then try again.\n' "${port}" >&2
+        printf '\n'
+        return 0
+    fi
+
+    if ! command_exists sudo
+    then
+        warn "sudo was not found, so the UFW rule could not be added automatically."
+        printf '  Run as root: ufw allow from %s to any port %s proto tcp\n' "${subnet}" "${port}" >&2
+        printf '\n'
+        return 0
+    fi
+
+    info "TabletControl needs LAN access on TCP port ${port}."
+    info "Adding a UFW rule for local network ${subnet}. sudo may ask for your password."
+
+    if sudo ufw allow from "${subnet}" to any port "${port}" proto tcp >/dev/null
+    then
+        success "UFW allows TabletControl from ${subnet} on TCP port ${port}"
+    else
+        warn "The UFW rule could not be added automatically."
+        printf '  Run manually: sudo ufw allow from %s to any port %s proto tcp\n' "${subnet}" "${port}" >&2
+    fi
+
+    printf '\n'
 }
 
 
@@ -652,6 +746,7 @@ main()
     create_or_migrate_config
     create_session_helper
     create_systemd_service
+    configure_ufw_firewall
     enable_service
     show_result
 }

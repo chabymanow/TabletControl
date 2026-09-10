@@ -33,6 +33,7 @@ import kotlinx.coroutines.launch
 fun SettingsScreen(
     currentIp: String,
     currentPort: String,
+    currentAuthToken: String,
     onSave: (String, String, String) -> Unit,
     onCancel: () -> Unit,
     onDisconnect: () -> Unit,
@@ -46,9 +47,11 @@ fun SettingsScreen(
     var error by rememberSaveable { mutableStateOf("") }
     var pairingMode by rememberSaveable { mutableStateOf(false) }
     var showDisconnectConfirmation by rememberSaveable { mutableStateOf(false) }
+    var showLocalDisconnectConfirmation by rememberSaveable { mutableStateOf(false) }
 
     var isConnecting by rememberSaveable { mutableStateOf(false) }
     var isPairing by rememberSaveable { mutableStateOf(false) }
+    var isDisconnecting by rememberSaveable { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -59,14 +62,35 @@ fun SettingsScreen(
             title = { Text("Disconnect from PC?") },
             text = {
                 Text(
-                    "This removes the saved PC connection and pairing token from this tablet. You can pair with this PC again later."
+                    "This removes this tablet from the PC's paired device list and clears the saved connection on this tablet."
                 )
             },
             confirmButton = {
                 Button(
                     onClick = {
                         showDisconnectConfirmation = false
-                        onDisconnect()
+                        error = ""
+                        isDisconnecting = true
+
+                        coroutineScope.launch {
+                            val result = PairingClient.disconnect(
+                                currentIp,
+                                currentPort,
+                                currentAuthToken
+                            )
+
+                            isDisconnecting = false
+
+                            if (result.success)
+                            {
+                                onDisconnect()
+                            }
+                            else
+                            {
+                                error = result.message
+                                showLocalDisconnectConfirmation = true
+                            }
+                        }
                     }
                 )
                 {
@@ -77,6 +101,36 @@ fun SettingsScreen(
                 TextButton(onClick = { showDisconnectConfirmation = false })
                 {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showLocalDisconnectConfirmation)
+    {
+        AlertDialog(
+            onDismissRequest = { showLocalDisconnectConfirmation = false },
+            title = { Text("PC could not be reached") },
+            text = {
+                Text(
+                    "TabletControl could not remove this tablet from the PC. Disconnect locally anyway? The PC may still show this tablet as paired."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showLocalDisconnectConfirmation = false
+                        onDisconnect()
+                    }
+                )
+                {
+                    Text("Disconnect locally")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLocalDisconnectConfirmation = false })
+                {
+                    Text("Keep connection")
                 }
             }
         )
@@ -115,7 +169,7 @@ fun SettingsScreen(
                         label = { Text("PC IP address") },
                         placeholder = { Text("192.168.1.100") },
                         singleLine = true,
-                        enabled = !isConnecting && !isPairing,
+                        enabled = !isConnecting && !isPairing && !isDisconnecting,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -129,7 +183,7 @@ fun SettingsScreen(
                         label = { Text("Port") },
                         placeholder = { Text("8765") },
                         singleLine = true,
-                        enabled = !isConnecting && !isPairing,
+                        enabled = !isConnecting && !isPairing && !isDisconnecting,
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -154,12 +208,12 @@ fun SettingsScreen(
                             label = { Text("Pairing code") },
                             placeholder = { Text("123456") },
                             singleLine = true,
-                            enabled = !isPairing,
+                            enabled = !isPairing && !isDisconnecting,
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
 
-                    if (isConnecting || isPairing)
+                    if (isConnecting || isPairing || isDisconnecting)
                     {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
@@ -169,13 +223,11 @@ fun SettingsScreen(
                             CircularProgressIndicator()
 
                             Text(
-                                if (isPairing)
+                                when
                                 {
-                                    "Pairing with TabletControl..."
-                                }
-                                else
-                                {
-                                    "Connecting to TabletControl..."
+                                    isPairing -> "Pairing with TabletControl..."
+                                    isDisconnecting -> "Disconnecting from TabletControl..."
+                                    else -> "Connecting to TabletControl..."
                                 }
                             )
                         }
@@ -198,7 +250,7 @@ fun SettingsScreen(
                         {
                             OutlinedButton(
                                 onClick = onCancel,
-                                enabled = !isConnecting && !isPairing,
+                                enabled = !isConnecting && !isPairing && !isDisconnecting,
                                 modifier = Modifier.weight(1f)
                             )
                             {
@@ -242,7 +294,7 @@ fun SettingsScreen(
                                         }
                                     }
                                 },
-                                enabled = !isPairing && pairingCode.length == 6,
+                                enabled = !isPairing && !isDisconnecting && pairingCode.length == 6,
                                 modifier = Modifier.weight(1f)
                             )
                             {
@@ -300,7 +352,7 @@ fun SettingsScreen(
                                         onSave(cleanIp, cleanPort.toString(), "")
                                     }
                                 },
-                                enabled = !isConnecting,
+                                enabled = !isConnecting && !isDisconnecting,
                                 modifier = Modifier.weight(1f)
                             )
                             {
@@ -313,7 +365,7 @@ fun SettingsScreen(
                     {
                         OutlinedButton(
                             onClick = { showDisconnectConfirmation = true },
-                            enabled = !isConnecting && !isPairing,
+                            enabled = !isConnecting && !isPairing && !isDisconnecting,
                             modifier = Modifier.fillMaxWidth()
                         )
                         {

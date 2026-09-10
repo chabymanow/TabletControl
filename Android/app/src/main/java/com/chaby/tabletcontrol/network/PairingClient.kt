@@ -21,6 +21,11 @@ data class PairingResult(
     val message: String = ""
 )
 
+data class DisconnectResult(
+    val success: Boolean,
+    val message: String = ""
+)
+
 object PairingClient
 {
     suspend fun getStatus(ip: String, port: String): PairingStatusResult
@@ -159,6 +164,79 @@ object PairingClient
                 PairingResult(
                     success = false,
                     message = "Could not pair with TabletControl."
+                )
+            }
+            finally
+            {
+                connection.disconnect()
+            }
+        }
+    }
+
+    suspend fun disconnect(
+        ip: String,
+        port: String,
+        token: String
+    ): DisconnectResult
+    {
+        if (token.isBlank())
+        {
+            return DisconnectResult(success = true)
+        }
+
+        return withContext(Dispatchers.IO) {
+            val connection = URL(
+                "http://$ip:$port/api/pair/unpair"
+            ).openConnection() as HttpURLConnection
+
+            try
+            {
+                connection.requestMethod = "POST"
+                connection.connectTimeout = 3000
+                connection.readTimeout = 3000
+                connection.useCaches = false
+                connection.doOutput = true
+                connection.setFixedLengthStreamingMode(0)
+                connection.setRequestProperty("Accept", "application/json")
+                connection.setRequestProperty("Authorization", "Bearer $token")
+
+                connection.outputStream.use { }
+
+                val responseCode = connection.responseCode
+                val responseBody = readResponse(connection, responseCode)
+
+                if (responseCode == 401 || responseCode == 404)
+                {
+                    return@withContext DisconnectResult(success = true)
+                }
+
+                if (responseCode !in 200..299)
+                {
+                    val message = try
+                    {
+                        JSONObject(responseBody).optString(
+                            "message",
+                            "Unable to disconnect from TabletControl."
+                        )
+                    }
+                    catch (exception: Exception)
+                    {
+                        "TabletControl returned HTTP $responseCode."
+                    }
+
+                    return@withContext DisconnectResult(
+                        success = false,
+                        message = message
+                    )
+                }
+
+                DisconnectResult(success = true)
+            }
+            catch (exception: Exception)
+            {
+                DisconnectResult(
+                    success = false,
+                    message = "Could not contact the PC to remove this tablet."
                 )
             }
             finally

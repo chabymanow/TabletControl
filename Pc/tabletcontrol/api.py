@@ -1,4 +1,8 @@
+import ipaddress
 import json
+import socket
+
+import psutil
 
 from http.server import SimpleHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
@@ -18,11 +22,102 @@ from .commands import get_commands, run_command
 from .config import (
     LOG_REQUESTS,
     PAIRING_CODE_TTL_SECONDS,
+    PORT,
     SESSION_COOKIE_NAME,
     SESSION_MAX_AGE_SECONDS,
     WEB_DIR,
 )
 from .stats import get_stats
+
+
+def get_primary_ipv4():
+    connection = None
+
+    try:
+        connection = socket.socket(
+            socket.AF_INET,
+            socket.SOCK_DGRAM
+        )
+
+        connection.connect(
+            ("1.1.1.1", 80)
+        )
+
+        address = connection.getsockname()[0]
+        parsed_address = ipaddress.ip_address(address)
+
+        if (
+            parsed_address.version == 4
+            and not parsed_address.is_loopback
+            and not parsed_address.is_link_local
+            and not parsed_address.is_unspecified
+        ):
+            return address
+
+    except (OSError, ValueError):
+        pass
+
+    finally:
+        if connection is not None:
+            connection.close()
+
+    try:
+        interface_stats = psutil.net_if_stats()
+
+        for interface_name, addresses in psutil.net_if_addrs().items():
+            if interface_name == "lo":
+                continue
+
+            interface = interface_stats.get(interface_name)
+
+            if interface is not None and not interface.isup:
+                continue
+
+            for address in addresses:
+                if address.family != socket.AF_INET:
+                    continue
+
+                try:
+                    parsed_address = ipaddress.ip_address(address.address)
+
+                except ValueError:
+                    continue
+
+                if (
+                    parsed_address.is_loopback
+                    or parsed_address.is_link_local
+                    or parsed_address.is_unspecified
+                ):
+                    continue
+
+                if parsed_address.is_private:
+                    return address.address
+
+        for interface_name, addresses in psutil.net_if_addrs().items():
+            if interface_name == "lo":
+                continue
+
+            for address in addresses:
+                if address.family != socket.AF_INET:
+                    continue
+
+                try:
+                    parsed_address = ipaddress.ip_address(address.address)
+
+                except ValueError:
+                    continue
+
+                if (
+                    not parsed_address.is_loopback
+                    and not parsed_address.is_link_local
+                    and not parsed_address.is_unspecified
+                ):
+                    return address.address
+
+    except (OSError, ValueError):
+        pass
+
+    return None
 
 
 class DashboardHandler(SimpleHTTPRequestHandler):
@@ -102,8 +197,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             return True
 
         return origin in {
-            "http://127.0.0.1:8765",
-            "http://localhost:8765",
+            f"http://127.0.0.1:{PORT}",
+            f"http://localhost:{PORT}",
+            f"http://[::1]:{PORT}",
         }
 
     def require_local_management(self):
@@ -180,6 +276,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             for key, values in parsed.items()
             if values
         }
+
+    def handle_pairing_info(self):
+        if not self.require_local_management():
+            return
+
+        address = get_primary_ipv4()
+
+        self.send_json(
+            {
+                "success": True,
+                "hostname": socket.gethostname(),
+                "ip": address,
+                "port": PORT,
+                "url": f"http://{address}:{PORT}" if address else None,
+            }
+        )
 
     def handle_pairing_status(self):
         self.send_json(
@@ -340,6 +452,10 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             "/pair.html",
         }:
             self.serve_pairing_page()
+            return
+
+        if path == "/api/pair/info":
+            self.handle_pairing_info()
             return
 
         if path == "/api/pair/status":

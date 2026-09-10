@@ -2,12 +2,14 @@ package com.chaby.tabletcontrol
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import com.chaby.tabletcontrol.network.PairingClient
 import com.chaby.tabletcontrol.security.AuthStorage
 import com.chaby.tabletcontrol.ui.DashboardScreen
 import com.chaby.tabletcontrol.ui.SettingsScreen
@@ -44,6 +46,18 @@ fun DashboardApp()
 
     var showSettings by rememberSaveable {
         mutableStateOf(serverIp.isBlank())
+    }
+
+    LaunchedEffect(serverIp, serverPort, authToken)
+    {
+        if (serverIp.isNotBlank() && authToken.isNotBlank())
+        {
+            PairingClient.syncDeviceName(
+                serverIp,
+                serverPort,
+                authToken
+            )
+        }
     }
 
     if (showSettings)

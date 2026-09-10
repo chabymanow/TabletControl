@@ -1,0 +1,41 @@
+# -------------------------
+# Release files
+# -------------------------
+*.apk
+*.aab
+
+# -------------------------
+# Signing keys
+# -------------------------
+*.jks
+*.keystore
+
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# -------------------------
+# Android / Gradle
+# -------------------------
+Android/.gradle/
+Android/**/build/
+Android/local.properties
+Android/.idea/
+
+# -------------------------
+# Environment / secrets
+# -------------------------
+.env
+*.env
+
+# -------------------------
+# OS / editor files
+# -------------------------
+.DS_Store
+Thumbs.db

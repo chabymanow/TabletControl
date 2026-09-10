@@ -205,23 +205,36 @@ object PairingClient
                 val responseCode = connection.responseCode
                 val responseBody = readResponse(connection, responseCode)
 
-                if (responseCode == 401 || responseCode == 404)
+                val responseMessage = try
+                {
+                    JSONObject(responseBody).optString("message", "")
+                }
+                catch (exception: Exception)
+                {
+                    ""
+                }
+
+                if (responseCode == 401)
+                {
+                    return@withContext DisconnectResult(success = true)
+                }
+
+                if (responseCode == 404 && responseMessage == "Device not found.")
                 {
                     return@withContext DisconnectResult(success = true)
                 }
 
                 if (responseCode !in 200..299)
                 {
-                    val message = try
+                    val message = if (responseCode == 404)
                     {
-                        JSONObject(responseBody).optString(
-                            "message",
-                            "Unable to disconnect from TabletControl."
-                        )
+                        "This PC does not support remote disconnect yet. Update and restart the TabletControl PC agent first."
                     }
-                    catch (exception: Exception)
+                    else
                     {
-                        "TabletControl returned HTTP $responseCode."
+                        responseMessage.ifBlank {
+                            "TabletControl returned HTTP $responseCode."
+                        }
                     }
 
                     return@withContext DisconnectResult(

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -15,6 +16,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -33,6 +35,7 @@ fun SettingsScreen(
     currentPort: String,
     onSave: (String, String, String) -> Unit,
     onCancel: () -> Unit,
+    onDisconnect: () -> Unit,
     canCancel: Boolean
 )
 {
@@ -42,11 +45,42 @@ fun SettingsScreen(
 
     var error by rememberSaveable { mutableStateOf("") }
     var pairingMode by rememberSaveable { mutableStateOf(false) }
+    var showDisconnectConfirmation by rememberSaveable { mutableStateOf(false) }
 
     var isConnecting by rememberSaveable { mutableStateOf(false) }
     var isPairing by rememberSaveable { mutableStateOf(false) }
 
     val coroutineScope = rememberCoroutineScope()
+
+    if (showDisconnectConfirmation)
+    {
+        AlertDialog(
+            onDismissRequest = { showDisconnectConfirmation = false },
+            title = { Text("Disconnect from PC?") },
+            text = {
+                Text(
+                    "This removes the saved PC connection and pairing token from this tablet. You can pair with this PC again later."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDisconnectConfirmation = false
+                        onDisconnect()
+                    }
+                )
+                {
+                    Text("Disconnect")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisconnectConfirmation = false })
+                {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 
     Scaffold { padding ->
         Box(
@@ -106,9 +140,7 @@ fun SettingsScreen(
                             style = MaterialTheme.typography.titleMedium
                         )
 
-                        Text(
-                            "Enter the 6-digit pairing code displayed on the PC."
-                        )
+                        Text("Enter the 6-digit pairing code displayed on the PC.")
 
                         OutlinedTextField(
                             value = pairingCode,
@@ -202,11 +234,7 @@ fun SettingsScreen(
 
                                         if (result.success)
                                         {
-                                            onSave(
-                                                cleanIp,
-                                                cleanPort,
-                                                result.token
-                                            )
+                                            onSave(cleanIp, cleanPort, result.token)
                                         }
                                         else
                                         {
@@ -265,17 +293,11 @@ fun SettingsScreen(
 
                                         if (status.authenticationRequired)
                                         {
-                                            error =
-                                                "This PC requires pairing. Start pairing on the PC first."
-
+                                            error = "This PC requires pairing. Start pairing on the PC first."
                                             return@launch
                                         }
 
-                                        onSave(
-                                            cleanIp,
-                                            cleanPort.toString(),
-                                            ""
-                                        )
+                                        onSave(cleanIp, cleanPort.toString(), "")
                                     }
                                 },
                                 enabled = !isConnecting,
@@ -284,6 +306,18 @@ fun SettingsScreen(
                             {
                                 Text("Connect")
                             }
+                        }
+                    }
+
+                    if (canCancel)
+                    {
+                        OutlinedButton(
+                            onClick = { showDisconnectConfirmation = true },
+                            enabled = !isConnecting && !isPairing,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        {
+                            Text("Disconnect from PC")
                         }
                     }
                 }

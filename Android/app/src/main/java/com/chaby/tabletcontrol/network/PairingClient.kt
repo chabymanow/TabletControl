@@ -1,5 +1,6 @@
 package com.chaby.tabletcontrol.network
 
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -28,6 +29,24 @@ data class DisconnectResult(
 
 object PairingClient
 {
+    private fun getDeviceName(): String
+    {
+        val manufacturer = Build.MANUFACTURER.orEmpty().trim()
+        val model = Build.MODEL.orEmpty().trim()
+        val displayManufacturer = manufacturer.replaceFirstChar { character ->
+            character.uppercase()
+        }
+
+        return when
+        {
+            manufacturer.isBlank() && model.isBlank() -> "Android Tablet"
+            manufacturer.isBlank() -> model
+            model.isBlank() -> displayManufacturer
+            model.startsWith(manufacturer, ignoreCase = true) -> model
+            else -> "$displayManufacturer $model"
+        }.take(80)
+    }
+
     suspend fun getStatus(ip: String, port: String): PairingStatusResult
     {
         return withContext(Dispatchers.IO) {
@@ -81,7 +100,7 @@ object PairingClient
         ip: String,
         port: String,
         code: String,
-        deviceName: String = "Android Tablet"
+        deviceName: String = getDeviceName()
     ): PairingResult
     {
         return withContext(Dispatchers.IO) {
